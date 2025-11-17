@@ -21,6 +21,12 @@ const BLOB_FILENAME = 'client-projects.json';
  */
 async function getAllProjects(): Promise<ProjectStore> {
   try {
+    // Check if Blob token is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn('BLOB_READ_WRITE_TOKEN not configured. Projects will not be persisted.');
+      return {};
+    }
+
     const { blobs } = await list({ prefix: BLOB_FILENAME });
 
     if (blobs.length === 0) {
@@ -42,6 +48,11 @@ async function getAllProjects(): Promise<ProjectStore> {
  */
 async function saveAllProjects(projects: ProjectStore): Promise<void> {
   try {
+    // Check if Blob token is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      throw new Error('BLOB_READ_WRITE_TOKEN not configured. Cannot save projects.');
+    }
+
     await put(BLOB_FILENAME, JSON.stringify(projects, null, 2), {
       access: 'public',
       contentType: 'application/json',

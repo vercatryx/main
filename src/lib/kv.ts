@@ -23,6 +23,12 @@ const BLOB_FILENAME = 'availability-requests.json';
  */
 async function getAllRequests(): Promise<AvailabilityStore> {
   try {
+    // Check if Blob token is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn('BLOB_READ_WRITE_TOKEN not configured. Availability requests will not be persisted.');
+      return {};
+    }
+
     // List blobs to find our file
     const { blobs } = await list({ prefix: BLOB_FILENAME });
 
@@ -47,6 +53,11 @@ async function getAllRequests(): Promise<AvailabilityStore> {
  */
 async function saveAllRequests(requests: AvailabilityStore): Promise<void> {
   try {
+    // Check if Blob token is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      throw new Error('BLOB_READ_WRITE_TOKEN not configured. Cannot save availability requests. Please configure Vercel Blob storage.');
+    }
+
     await put(BLOB_FILENAME, JSON.stringify(requests, null, 2), {
       access: 'public',
       contentType: 'application/json',
