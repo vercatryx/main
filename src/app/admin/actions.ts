@@ -2,6 +2,7 @@
 
 import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 // Define a type for public metadata to ensure type safety
 interface UserPublicMetadata {
@@ -26,9 +27,13 @@ export async function createUser(formData: FormData) {
   }
 
   revalidatePath("/admin");
+  redirect("/admin");
 }
 
-export async function updateUserRole(userId: string, role: 'superuser' | 'user') {
+export async function updateUserRole(formData: FormData) {
+  const userId = formData.get("userId") as string;
+  const role = formData.get("role") as 'superuser' | 'user';
+
   try {
     const client = await clerkClient();
     await client.users.updateUser(userId, {
@@ -40,9 +45,12 @@ export async function updateUserRole(userId: string, role: 'superuser' | 'user')
   }
 
   revalidatePath("/admin");
+  redirect("/admin");
 }
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(formData: FormData) {
+  const userId = formData.get("userId") as string;
+
   try {
     const client = await clerkClient();
     await client.users.deleteUser(userId);
@@ -52,4 +60,5 @@ export async function deleteUser(userId: string) {
   }
 
   revalidatePath("/admin");
+  redirect("/admin");
 }
