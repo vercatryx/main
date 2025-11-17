@@ -6,10 +6,10 @@ const DATA_FILE = path.join(process.cwd(), 'data', 'availability-requests.json')
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await context.params;
 
     const content = await fs.readFile(DATA_FILE, 'utf-8');
     const requests = JSON.parse(content);

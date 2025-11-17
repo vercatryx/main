@@ -6,10 +6,10 @@ const DATA_FILE = path.join(process.cwd(), 'data', 'availability-requests.json')
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await context.params;
     const body = await request.json();
     const { status } = body;
 
