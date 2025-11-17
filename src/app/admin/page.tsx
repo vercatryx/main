@@ -7,6 +7,15 @@ interface UserPublicMetadata {
   role?: "superuser" | "user";
 }
 
+// Serializable user type for client component
+export interface SerializableUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailAddresses: Array<{ emailAddress: string }>;
+  publicMetadata: UserPublicMetadata;
+}
+
 async function AdminDashboard() {
   const { userId: currentUserId } = await auth();
 
@@ -39,7 +48,18 @@ async function AdminDashboard() {
   const { data: users } = await client.users.getUserList();
   const projects = await getAllUserProjects();
 
-  return <AdminClient users={users} currentUserId={currentUserId} initialProjects={projects} />;
+  // Serialize users for client component
+  const serializedUsers: SerializableUser[] = users.map(user => ({
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    emailAddresses: user.emailAddresses.map(email => ({
+      emailAddress: email.emailAddress
+    })),
+    publicMetadata: user.publicMetadata as UserPublicMetadata
+  }));
+
+  return <AdminClient users={serializedUsers} currentUserId={currentUserId} initialProjects={projects} />;
 }
 
 export default function AdminPage() {

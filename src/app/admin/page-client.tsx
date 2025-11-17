@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { User } from "@clerk/nextjs/server";
 import { Plus, Edit2, Trash2, X, ChevronDown, ChevronUp } from "lucide-react";
 import { createUser, updateUserRole, deleteUser } from "./actions";
+import { SerializableUser } from "./page";
 
 interface Project {
   id: string;
@@ -24,7 +24,7 @@ interface ProjectStore {
 }
 
 interface AdminClientProps {
-  users: User[];
+  users: SerializableUser[];
   currentUserId: string;
   initialProjects: ProjectStore;
 }
@@ -215,7 +215,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
       <div>
         <h2 className="text-2xl font-semibold mb-4">Users & Projects</h2>
         <div className="space-y-4">
-          {users.map((user: User) => {
+          {users.map((user) => {
             const isExpanded = expandedUsers.has(user.id);
             const userProjects = projects[user.id] || [];
             const metadata = user.publicMetadata as UserPublicMetadata;
