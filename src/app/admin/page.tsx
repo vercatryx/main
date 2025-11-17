@@ -54,6 +54,17 @@ async function AdminDashboard() {
     <div>
       <h1 className="text-4xl font-bold mb-8">Admin Dashboard</h1>
 
+      {/* Quick Links */}
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a
+          href="/admin/projects"
+          className="block bg-blue-900 hover:bg-blue-800 rounded-lg p-6 transition-colors"
+        >
+          <h3 className="text-xl font-semibold mb-2">Manage Client Projects</h3>
+          <p className="text-gray-300">Add and manage project links for clients</p>
+        </a>
+      </div>
+
       {/* Create User Form */}
       <div className="mb-12 bg-gray-900 rounded-lg p-6">
         <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
