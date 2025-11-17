@@ -1,4 +1,4 @@
-import { put, head } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 
 export interface AvailabilityRequest {
   id: string;
@@ -23,15 +23,20 @@ const BLOB_FILENAME = 'availability-requests.json';
  */
 async function getAllRequests(): Promise<AvailabilityStore> {
   try {
-    const blob = await head(BLOB_FILENAME);
-    if (!blob) {
+    // List blobs to find our file
+    const { blobs } = await list({ prefix: BLOB_FILENAME });
+
+    if (blobs.length === 0) {
       return {};
     }
 
+    // Get the most recent blob with this filename
+    const blob = blobs[0];
     const response = await fetch(blob.url);
     const data = await response.json();
     return data as AvailabilityStore;
   } catch (error) {
+    console.error('Error reading from blob:', error);
     // If blob doesn't exist, return empty object
     return {};
   }
@@ -41,10 +46,16 @@ async function getAllRequests(): Promise<AvailabilityStore> {
  * Save all availability requests to blob storage
  */
 async function saveAllRequests(requests: AvailabilityStore): Promise<void> {
-  await put(BLOB_FILENAME, JSON.stringify(requests, null, 2), {
-    access: 'public',
-    contentType: 'application/json',
-  });
+  try {
+    await put(BLOB_FILENAME, JSON.stringify(requests, null, 2), {
+      access: 'public',
+      contentType: 'application/json',
+      addRandomSuffix: false, // Important: don't add random suffix to filename
+    });
+  } catch (error) {
+    console.error('Error writing to blob:', error);
+    throw error;
+  }
 }
 
 /**
