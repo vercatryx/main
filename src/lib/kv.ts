@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { put, head } from '@vercel/blob';
 
 export interface AvailabilityRequest {
   id: string;
@@ -12,24 +12,80 @@ export interface AvailabilityRequest {
   respondedAt?: string;
 }
 
-const AVAILABILITY_PREFIX = 'availability:';
-const AVAILABILITY_TTL = 60 * 60 * 24; // 24 hours in seconds
+interface AvailabilityStore {
+  [key: string]: AvailabilityRequest;
+}
+
+const BLOB_FILENAME = 'availability-requests.json';
+
+/**
+ * Get all availability requests from blob storage
+ */
+async function getAllRequests(): Promise<AvailabilityStore> {
+  try {
+    const blob = await head(BLOB_FILENAME);
+    if (!blob) {
+      return {};
+    }
+
+    const response = await fetch(blob.url);
+    const data = await response.json();
+    return data as AvailabilityStore;
+  } catch (error) {
+    // If blob doesn't exist, return empty object
+    return {};
+  }
+}
+
+/**
+ * Save all availability requests to blob storage
+ */
+async function saveAllRequests(requests: AvailabilityStore): Promise<void> {
+  await put(BLOB_FILENAME, JSON.stringify(requests, null, 2), {
+    access: 'public',
+    contentType: 'application/json',
+  });
+}
+
+/**
+ * Clean up old requests (older than 24 hours)
+ */
+function cleanupOldRequests(requests: AvailabilityStore): AvailabilityStore {
+  const now = new Date();
+  const cleaned: AvailabilityStore = {};
+
+  for (const [id, request] of Object.entries(requests)) {
+    const createdAt = new Date(request.createdAt);
+    const diffHours = (now.getTime() - createdAt.getTime()) / 1000 / 60 / 60;
+
+    // Keep requests that are less than 24 hours old
+    if (diffHours < 24) {
+      cleaned[id] = request;
+    }
+  }
+
+  return cleaned;
+}
 
 /**
  * Save an availability request to the database
  */
 export async function saveAvailabilityRequest(request: AvailabilityRequest): Promise<void> {
-  const key = `${AVAILABILITY_PREFIX}${request.id}`;
-  await kv.set(key, request, { ex: AVAILABILITY_TTL });
+  let requests = await getAllRequests();
+
+  // Clean up old requests before saving
+  requests = cleanupOldRequests(requests);
+
+  requests[request.id] = request;
+  await saveAllRequests(requests);
 }
 
 /**
  * Get an availability request from the database
  */
 export async function getAvailabilityRequest(id: string): Promise<AvailabilityRequest | null> {
-  const key = `${AVAILABILITY_PREFIX}${id}`;
-  const request = await kv.get<AvailabilityRequest>(key);
-  return request;
+  const requests = await getAllRequests();
+  return requests[id] || null;
 }
 
 /**
@@ -39,7 +95,8 @@ export async function updateAvailabilityStatus(
   id: string,
   status: 'available' | 'unavailable' | 'timeout'
 ): Promise<AvailabilityRequest | null> {
-  const request = await getAvailabilityRequest(id);
+  const requests = await getAllRequests();
+  const request = requests[id];
 
   if (!request) {
     return null;
@@ -48,7 +105,8 @@ export async function updateAvailabilityStatus(
   request.status = status;
   request.respondedAt = new Date().toISOString();
 
-  await saveAvailabilityRequest(request);
+  requests[id] = request;
+  await saveAllRequests(requests);
 
   return request;
 }
