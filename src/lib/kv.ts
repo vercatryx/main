@@ -51,6 +51,7 @@ async function saveAllRequests(requests: AvailabilityStore): Promise<void> {
       access: 'public',
       contentType: 'application/json',
       addRandomSuffix: false, // Important: don't add random suffix to filename
+      allowOverwrite: true, // Allow updating the existing blob
     });
   } catch (error) {
     console.error('Error writing to blob:', error);
