@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'data', 'availability-requests.json');
+import { updateAvailabilityStatus } from '@/lib/kv';
 
 export async function POST(
   request: NextRequest,
@@ -20,20 +17,15 @@ export async function POST(
       );
     }
 
-    const content = await fs.readFile(DATA_FILE, 'utf-8');
-    const requests = JSON.parse(content);
+    // Update status in database
+    const updatedRequest = await updateAvailabilityStatus(id, status);
 
-    if (!requests[id]) {
+    if (!updatedRequest) {
       return NextResponse.json(
         { error: 'Request not found' },
         { status: 404 }
       );
     }
-
-    requests[id].status = status;
-    requests[id].respondedAt = new Date().toISOString();
-
-    await fs.writeFile(DATA_FILE, JSON.stringify(requests, null, 2));
 
     return NextResponse.json({ success: true });
   } catch (error) {

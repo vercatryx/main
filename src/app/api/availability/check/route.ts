@@ -1,26 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { randomUUID } from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'data', 'availability-requests.json');
-
-async function ensureDataFile() {
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify({}));
-  }
-}
-
-async function saveRequest(id: string, data: any) {
-  await ensureDataFile();
-  const content = await fs.readFile(DATA_FILE, 'utf-8');
-  const requests = JSON.parse(content);
-  requests[id] = data;
-  await fs.writeFile(DATA_FILE, JSON.stringify(requests, null, 2));
-}
+import { saveAvailabilityRequest, type AvailabilityRequest } from '@/lib/kv';
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,8 +19,8 @@ export async function POST(request: NextRequest) {
     // Generate unique ID
     const requestId = randomUUID();
 
-    // Save request data
-    await saveRequest(requestId, {
+    // Save request data to database
+    const requestData: AvailabilityRequest = {
       id: requestId,
       name,
       email,
@@ -48,7 +29,9 @@ export async function POST(request: NextRequest) {
       message,
       status: 'pending',
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    await saveAvailabilityRequest(requestData);
 
     // Create admin link
     const adminLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/admin/availability/${requestId}`;
