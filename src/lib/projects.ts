@@ -1,4 +1,9 @@
 import { put, list } from '@vercel/blob';
+import * as fsProjects from './projects-fs';
+
+// Use file system storage in development, blob in production
+const isDevelopment = process.env.NODE_ENV === 'development';
+const USE_FS = isDevelopment || !process.env.BLOB_READ_WRITE_TOKEN;
 
 export interface Project {
   id: string;
@@ -20,6 +25,8 @@ const BLOB_FILENAME = 'client-projects.json';
  * Get all projects from blob storage
  */
 async function getAllProjects(): Promise<ProjectStore> {
+  console.log('=== GET ALL PROJECTS CALLED ===');
+
   try {
     // Check if Blob token is configured
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
@@ -27,7 +34,9 @@ async function getAllProjects(): Promise<ProjectStore> {
       return {};
     }
 
+    console.log('Listing blobs with prefix:', BLOB_FILENAME);
     const { blobs } = await list({ prefix: BLOB_FILENAME });
+    console.log('Found blobs:', blobs.length);
 
     if (blobs.length === 0) {
       console.log('No projects blob found, returning empty store');
@@ -77,13 +86,18 @@ async function getAllProjects(): Promise<ProjectStore> {
  * Save all projects to blob storage
  */
 async function saveAllProjects(projects: ProjectStore): Promise<void> {
+  console.log('=== SAVE ALL PROJECTS CALLED ===');
+  console.log('Token configured:', !!process.env.BLOB_READ_WRITE_TOKEN);
+  console.log('Token preview:', process.env.BLOB_READ_WRITE_TOKEN?.substring(0, 20) + '...');
+  console.log('Projects to save:', JSON.stringify(projects, null, 2));
+
   try {
     // Check if Blob token is configured
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       throw new Error('BLOB_READ_WRITE_TOKEN not configured. Cannot save projects.');
     }
 
-    console.log('Saving projects to blob:', JSON.stringify(projects, null, 2));
+    console.log('Calling put() with filename:', BLOB_FILENAME);
 
     const result = await put(BLOB_FILENAME, JSON.stringify(projects, null, 2), {
       access: 'public',
@@ -92,9 +106,12 @@ async function saveAllProjects(projects: ProjectStore): Promise<void> {
       allowOverwrite: true,
     });
 
-    console.log('Successfully saved projects to blob:', result.url);
+    console.log('✅ Successfully saved projects to blob!');
+    console.log('Blob URL:', result.url);
+    console.log('Blob pathname:', result.pathname);
   } catch (error) {
-    console.error('Error writing projects to blob:', error);
+    console.error('❌ Error writing projects to blob:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
@@ -103,6 +120,10 @@ async function saveAllProjects(projects: ProjectStore): Promise<void> {
  * Get all projects for a specific user
  */
 export async function getUserProjects(userId: string): Promise<Project[]> {
+  if (USE_FS) {
+    console.log('[WRAPPER] Using file system storage');
+    return fsProjects.getUserProjects(userId);
+  }
   const allProjects = await getAllProjects();
   return allProjects[userId] || [];
 }
@@ -111,6 +132,10 @@ export async function getUserProjects(userId: string): Promise<Project[]> {
  * Get all users with their projects (for admin)
  */
 export async function getAllUserProjects(): Promise<ProjectStore> {
+  if (USE_FS) {
+    console.log('[WRAPPER] Using file system storage');
+    return fsProjects.getAllUserProjects();
+  }
   return await getAllProjects();
 }
 
@@ -123,6 +148,11 @@ export async function addProject(
   url: string,
   description?: string
 ): Promise<Project> {
+  if (USE_FS) {
+    console.log('[WRAPPER] Using file system storage');
+    return fsProjects.addProject(userId, title, url, description);
+  }
+
   const allProjects = await getAllProjects();
 
   if (!allProjects[userId]) {
@@ -153,6 +183,11 @@ export async function updateProject(
   projectId: string,
   updates: { title?: string; url?: string; description?: string }
 ): Promise<Project | null> {
+  if (USE_FS) {
+    console.log('[WRAPPER] Using file system storage');
+    return fsProjects.updateProject(userId, projectId, updates);
+  }
+
   const allProjects = await getAllProjects();
 
   if (!allProjects[userId]) {
@@ -182,6 +217,11 @@ export async function deleteProject(
   userId: string,
   projectId: string
 ): Promise<boolean> {
+  if (USE_FS) {
+    console.log('[WRAPPER] Using file system storage');
+    return fsProjects.deleteProject(userId, projectId);
+  }
+
   const allProjects = await getAllProjects();
 
   if (!allProjects[userId]) {
