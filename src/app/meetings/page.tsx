@@ -32,7 +32,22 @@ async function MeetingsPage() {
     isAdmin,
   };
 
-  return <MeetingsClient userInfo={userInfo} initialMeetings={upcomingMeetings} />;
+  // If admin, fetch all users for meeting creation
+  let users;
+  if (isAdmin) {
+    const { data: allUsers } = await client.users.getUserList();
+    users = allUsers.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      emailAddresses: u.emailAddresses.map((email) => ({
+        emailAddress: email.emailAddress,
+      })),
+      publicMetadata: JSON.parse(JSON.stringify(u.publicMetadata)),
+    }));
+  }
+
+  return <MeetingsClient userInfo={userInfo} initialMeetings={upcomingMeetings} users={users} />;
 }
 
 export default function Page() {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square, Video, Calendar, ExternalLink } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +51,16 @@ interface ChatMessage {
   message: string;
   timestamp: number;
   attachments?: ChatAttachment[];
+}
+
+interface Meeting {
+  id: string;
+  title: string;
+  description?: string;
+  scheduledAt: string;
+  duration: number;
+  jitsiRoomName: string;
+  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
 }
 
 export default function ClientPortal({ projects, userName, isAdmin, usersWithProjects }: ClientPortalProps) {
@@ -134,6 +144,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   });
   const projectIdFromUrlRef = useRef<string | null>(searchParams.get('project'));
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [upcomingMeeting, setUpcomingMeeting] = useState<Meeting | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -218,6 +229,36 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       });
     }
   }, [chatProjectId, chatState, selectedUserId, selectedProject, isAdmin, updateURL]);
+
+  // Fetch upcoming meeting for regular users
+  useEffect(() => {
+    if (!isAdmin) {
+      const fetchUpcomingMeeting = async () => {
+        try {
+          const res = await fetch('/api/meetings/upcoming');
+          if (res.ok) {
+            const data = await res.json();
+            // Get the first meeting that's within 3 hours
+            const now = new Date();
+            const upcomingMeetings = data.meetings.filter((meeting: Meeting) => {
+              const scheduledDate = new Date(meeting.scheduledAt);
+              const joinWindowStart = new Date(scheduledDate.getTime() - 30 * 60 * 1000); // 30 min before
+              const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after
+              return now >= joinWindowStart && now <= joinWindowEnd;
+            });
+            setUpcomingMeeting(upcomingMeetings[0] || null);
+          }
+        } catch (error) {
+          console.error('Error fetching upcoming meeting:', error);
+        }
+      };
+
+      fetchUpcomingMeeting();
+      // Refresh every minute
+      const interval = setInterval(fetchUpcomingMeeting, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -694,17 +735,17 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   };
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+    <div className="flex h-screen bg-black text-white overflow-hidden">
       {/* Sidebar - full width on mobile, toggleable on desktop */}
       <div
         className={`${
           isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
-        } bg-gray-900 border-r border-gray-800 transition-all duration-300 overflow-hidden flex flex-col`}
+        } bg-black border-r border-gray-800 transition-all duration-300 overflow-hidden flex flex-col`}
       >
         {chatState === 'sidebar' ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-800 bg-blue-800">
+            <div className="p-4 border-b border-gray-800 bg-red-900/30">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-bold text-lg">
                   {getProjectForChat()?.title}
@@ -721,14 +762,14 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   )}
                   <button
                     onClick={() => setChatState('expanded')}
-                    className="p-2 hover:bg-blue-700 rounded-lg"
+                    className="p-2 hover:bg-red-700/30 rounded-lg"
                     title="Expand chat"
                   >
                     <Maximize2 className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setChatState('closed')}
-                    className="p-2 hover:bg-blue-700 rounded-lg"
+                    className="p-2 hover:bg-red-700/30 rounded-lg"
                     title="Close chat"
                   >
                     <X className="w-5 h-5" />
@@ -752,8 +793,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <div
                       className={`rounded-lg px-3 py-2 max-w-xs ${
                         msg.userId === user?.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-700 text-gray-200'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-800/50 text-gray-300'
                       }`}
                     >
                       {msg.message && msg.message.trim() && (
@@ -998,8 +1039,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <div
                       className={`rounded-lg px-3 py-2 max-w-md ${
                         msg.userId === user?.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-700 text-gray-200'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-800/50 text-gray-300'
                       }`}
                     >
                       {msg.message && msg.message.trim() && (
@@ -1226,6 +1267,54 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </DropdownMenu>
             </div>
 
+            {/* Upcoming Meeting for Users */}
+            {!isAdmin && upcomingMeeting && (
+              <div className="p-4 border-b border-gray-800">
+                <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Video className="w-5 h-5 text-red-400 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-white mb-1">{upcomingMeeting.title}</h3>
+                      <div className="flex items-center gap-1 text-xs text-gray-300 mb-2">
+                        <Calendar className="w-3 h-3" />
+                        <span>
+                          {new Date(upcomingMeeting.scheduledAt).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </span>
+                        <span>({upcomingMeeting.duration} min)</span>
+                      </div>
+                      <a
+                        href={`/meetings/${upcomingMeeting.id}/join`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded transition-colors"
+                      >
+                        <Video className="w-3 h-3" />
+                        Join Meeting
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Meetings Button for Admin */}
+            {isAdmin && (
+              <div className="p-4 border-b border-gray-800">
+                <a
+                  href="/meetings"
+                  className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <Video className="w-4 h-4" />
+                  Manage Meetings
+                </a>
+              </div>
+            )}
+
             {/* Admin User Selector */}
             {isAdmin && (
               <div className="p-4 border-b border-gray-800">
@@ -1238,7 +1327,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <select
                       value={selectedUserId || ''}
                       onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-red-500 outline-none"
                     >
                       {usersWithProjects.map((user) => (
                         <option key={user.id} value={user.id}>
@@ -1271,8 +1360,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     }}
                     className={`w-full text-left p-4 rounded-lg transition-colors ${
                       selectedProject?.id === project.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-900 hover:bg-gray-800 text-gray-300'
                     }`}
                   >
                     <h3 className="font-semibold mb-1">{project.title}</h3>

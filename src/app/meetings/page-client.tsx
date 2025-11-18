@@ -5,7 +5,26 @@ import { Meeting } from "@/lib/meetings";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Users, Video } from "lucide-react";
+import { Calendar, Clock, Users, Video, Plus, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 
 interface UserInfo {
@@ -16,14 +35,33 @@ interface UserInfo {
   isAdmin: boolean;
 }
 
+interface SerializableUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailAddresses: { emailAddress: string }[];
+  publicMetadata: any;
+}
+
 interface MeetingsClientProps {
   userInfo: UserInfo;
   initialMeetings: Meeting[];
+  users?: SerializableUser[];
 }
 
-export default function MeetingsClient({ userInfo, initialMeetings }: MeetingsClientProps) {
+export default function MeetingsClient({ userInfo, initialMeetings, users }: MeetingsClientProps) {
   const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
   const [loading, setLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Form state for creating meetings
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    scheduledAt: "",
+    duration: "60",
+    participantUserIds: [] as string[],
+  });
 
   const refreshMeetings = async () => {
     setLoading(true);
@@ -92,6 +130,88 @@ export default function MeetingsClient({ userInfo, initialMeetings }: MeetingsCl
     );
   };
 
+  const handleCreateMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      // Convert datetime-local to ISO string with proper timezone
+      const scheduledAtISO = new Date(formData.scheduledAt).toISOString();
+
+      const response = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          scheduledAt: scheduledAtISO,
+          duration: parseInt(formData.duration),
+        }),
+      });
+
+      if (response.ok) {
+        await refreshMeetings();
+        closeModal();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to create meeting');
+      }
+    } catch (error) {
+      console.error('Error creating meeting:', error);
+      alert('Failed to create meeting');
+    }
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    if (!confirm('Are you sure you want to delete this meeting?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await refreshMeetings();
+      } else {
+        alert('Failed to delete meeting');
+      }
+    } catch (error) {
+      console.error('Error deleting meeting:', error);
+      alert('Failed to delete meeting');
+    }
+  };
+
+  const openCreateModal = () => {
+    setFormData({
+      title: "",
+      description: "",
+      scheduledAt: "",
+      duration: "60",
+      participantUserIds: [],
+    });
+    setShowCreateModal(true);
+  };
+
+  const closeModal = () => {
+    setShowCreateModal(false);
+    setFormData({
+      title: "",
+      description: "",
+      scheduledAt: "",
+      duration: "60",
+      participantUserIds: [],
+    });
+  };
+
+  const toggleParticipant = (userId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      participantUserIds: prev.participantUserIds.includes(userId)
+        ? prev.participantUserIds.filter((id) => id !== userId)
+        : [...prev.participantUserIds, userId],
+    }));
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -103,12 +223,10 @@ export default function MeetingsClient({ userInfo, initialMeetings }: MeetingsCl
         </div>
         <div className="flex gap-2">
           {userInfo.isAdmin && (
-            <Link href="/admin">
-              <Button variant="default">
-                <Video className="mr-2 h-4 w-4" />
-                Create Meeting
-              </Button>
-            </Link>
+            <Button onClick={openCreateModal} variant="default">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Meeting
+            </Button>
           )}
           <Button onClick={refreshMeetings} disabled={loading} variant="outline">
             {loading ? 'Refreshing...' : 'Refresh'}
@@ -126,12 +244,10 @@ export default function MeetingsClient({ userInfo, initialMeetings }: MeetingsCl
                 You don't have any meetings scheduled at the moment.
               </p>
               {userInfo.isAdmin && (
-                <Link href="/admin">
-                  <Button className="mt-4" size="lg">
-                    <Video className="mr-2 h-4 w-4" />
-                    Create Your First Meeting
-                  </Button>
-                </Link>
+                <Button onClick={openCreateModal} className="mt-4" size="lg">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Your First Meeting
+                </Button>
               )}
             </div>
           </CardContent>
@@ -167,23 +283,136 @@ export default function MeetingsClient({ userInfo, initialMeetings }: MeetingsCl
                   <span>{meeting.participantUserIds.length + 1} participants</span>
                 </div>
               </CardContent>
-              <CardFooter>
+              <CardFooter className={userInfo.isAdmin ? "flex gap-2" : ""}>
                 {canJoinMeeting(meeting) ? (
-                  <Link href={`/meetings/${meeting.id}/join`} className="w-full">
+                  <Link href={`/meetings/${meeting.id}/join`} className={userInfo.isAdmin ? "flex-1" : "w-full"}>
                     <Button className="w-full" size="lg">
                       <Video className="mr-2 h-4 w-4" />
                       Join Meeting
                     </Button>
                   </Link>
                 ) : (
-                  <Button className="w-full" disabled size="lg">
+                  <Button className={userInfo.isAdmin ? "flex-1" : "w-full"} disabled size="lg">
                     Not Yet Available
+                  </Button>
+                )}
+                {userInfo.isAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    onClick={() => handleDeleteMeeting(meeting.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </CardFooter>
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Create Meeting Dialog */}
+      {userInfo.isAdmin && users && (
+        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+          <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create New Meeting</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Schedule a meeting with one or more users
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleCreateMeeting} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Meeting Title</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Team Sync"
+                  required
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Discuss project progress and next steps"
+                  rows={3}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="scheduledAt">Date & Time</Label>
+                  <Input
+                    id="scheduledAt"
+                    type="datetime-local"
+                    value={formData.scheduledAt}
+                    onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
+                    required
+                    className="bg-gray-800 border-gray-700"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duration (minutes)</Label>
+                  <Select
+                    value={formData.duration}
+                    onValueChange={(value) => setFormData({ ...formData, duration: value })}
+                  >
+                    <SelectTrigger className="bg-gray-800 border-gray-700">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="45">45 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                      <SelectItem value="90">1.5 hours</SelectItem>
+                      <SelectItem value="120">2 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Participants ({formData.participantUserIds.length} selected)</Label>
+                <div className="border border-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800">
+                  {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
+                    <div key={user.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`user-${user.id}`}
+                        checked={formData.participantUserIds.includes(user.id)}
+                        onCheckedChange={() => toggleParticipant(user.id)}
+                      />
+                      <label
+                        htmlFor={`user-${user.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {user.firstName} {user.lastName} ({user.emailAddresses[0]?.emailAddress})
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeModal}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={formData.participantUserIds.length === 0}>
+                  Create Meeting
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
