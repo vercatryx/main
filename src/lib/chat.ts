@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from './r2';
 
 export interface ChatAttachment {
   type: 'image' | 'file' | 'voice';
@@ -164,19 +164,21 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
 }
 
 /**
- * Upload a file to local storage for chat attachments
- * TODO: Replace with Supabase Storage or S3 later
+ * Upload a file to Cloudflare R2 for chat attachments
  */
 export async function uploadChatFile(
   projectId: string,
   messageId: string,
   file: File
 ): Promise<ChatAttachment> {
-  // For now, save to local public directory
+  // Generate unique file key with timestamp to prevent collisions
+  const timestamp = Date.now();
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileKey = `chat-files/${projectId}/${messageId}/${timestamp}-${sanitizedFilename}`;
+
+  // Convert File to Buffer
   const fileBuffer = await file.arrayBuffer();
-  const filePath = path.join(process.cwd(), 'public', 'chat-files', projectId, messageId, file.name);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, Buffer.from(fileBuffer));
+  const buffer = Buffer.from(fileBuffer);
 
   // Determine attachment type based on file type and name
   let attachmentType: 'image' | 'file' | 'voice' = 'file';
@@ -186,9 +188,29 @@ export async function uploadChatFile(
     attachmentType = 'voice';
   }
 
+  // Upload to R2
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: fileKey,
+    Body: buffer,
+    ContentType: file.type,
+    ContentLength: file.size,
+    Metadata: {
+      'original-filename': file.name,
+      'project-id': projectId,
+      'message-id': messageId,
+      'attachment-type': attachmentType,
+    },
+  });
+
+  await r2Client.send(command);
+
+  // Construct public URL
+  const publicUrl = `${R2_PUBLIC_URL}/${fileKey}`;
+
   const attachment: ChatAttachment = {
     type: attachmentType,
-    url: `/chat-files/${projectId}/${messageId}/${file.name}`,
+    url: publicUrl,
     filename: file.name,
     size: file.size,
     mimeType: file.type,
@@ -198,13 +220,33 @@ export async function uploadChatFile(
 }
 
 /**
- * Delete a chat file
+ * Delete a chat file from R2
  */
 export async function deleteChatFile(fileUrl: string): Promise<void> {
   try {
-    const filePath = path.join(process.cwd(), 'public', fileUrl);
-    await fs.unlink(filePath);
+    // Extract the file key from the public URL
+    // URL format: https://pub-xxxxx.r2.dev/chat-files/projectId/messageId/filename
+    // or: https://files.vercatryx.com/chat-files/projectId/messageId/filename
+    const urlParts = fileUrl.split('/');
+    const keyIndex = urlParts.indexOf('chat-files');
+
+    if (keyIndex === -1) {
+      console.error('Invalid file URL format:', fileUrl);
+      return;
+    }
+
+    // Reconstruct the key from the URL
+    const fileKey = urlParts.slice(keyIndex).join('/');
+
+    const command = new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: fileKey,
+    });
+
+    await r2Client.send(command);
+    console.log('File deleted from R2:', fileKey);
   } catch (error) {
-    console.error('Error deleting chat file:', error);
+    console.error('Error deleting chat file from R2:', error);
+    throw error;
   }
 }
