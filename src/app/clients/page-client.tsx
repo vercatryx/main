@@ -76,14 +76,24 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   // Load project URL dynamically to hide it from HTML
   useEffect(() => {
     if (selectedProject && iframeRef.current) {
+      console.log('Loading project:', selectedProject.title, selectedProject.id);
+
       // For admin dashboard, load URL directly
       if (selectedProject.id === 'admin-dashboard') {
+        console.log('Loading admin dashboard at:', selectedProject.url);
         iframeRef.current.src = selectedProject.url;
       } else {
         // For regular projects, fetch the URL from our proxy endpoint
+        console.log('Fetching project URL from proxy for:', selectedProject.id);
         fetch(`/api/projects/proxy/${selectedProject.id}`)
-          .then((res) => res.json())
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            return res.json();
+          })
           .then((data) => {
+            console.log('Received URL from proxy:', data.url);
             if (data.url && iframeRef.current) {
               iframeRef.current.src = data.url;
             }

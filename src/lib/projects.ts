@@ -57,9 +57,16 @@ async function getAllProjects(): Promise<ProjectStore> {
       return {};
     }
 
-    const data = await response.json();
-    console.log('Successfully read projects from blob:', JSON.stringify(data, null, 2));
-    return data as ProjectStore;
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      console.log('Successfully read projects from blob:', JSON.stringify(data, null, 2));
+      return data as ProjectStore;
+    } catch (parseError) {
+      console.error('Failed to parse blob JSON:', parseError);
+      console.error('Blob content:', text.substring(0, 500));
+      return {};
+    }
   } catch (error) {
     console.error('Error reading projects from blob:', error);
     return {};

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { getUserProjects } from '@/lib/projects';
+import { auth, currentUser } from '@clerk/nextjs/server';
+import { getUserProjects, getAllUserProjects } from '@/lib/projects';
+
+interface UserPublicMetadata {
+  role?: 'superuser' | 'user';
+}
 
 export async function GET(
   request: NextRequest,
@@ -18,9 +22,29 @@ export async function GET(
 
     const { id: projectId } = await context.params;
 
-    // Get user's projects
-    const projects = await getUserProjects(userId);
-    const project = projects.find((p) => p.id === projectId);
+    // Check if user is an admin
+    const user = await currentUser();
+    const publicMetadata = user?.publicMetadata as UserPublicMetadata;
+    const isAdmin = publicMetadata?.role === 'superuser';
+
+    let project;
+
+    if (isAdmin) {
+      // Admins can access any project
+      const allProjects = await getAllUserProjects();
+      // Search through all users' projects
+      for (const userProjects of Object.values(allProjects)) {
+        const found = userProjects.find((p) => p.id === projectId);
+        if (found) {
+          project = found;
+          break;
+        }
+      }
+    } else {
+      // Regular users can only access their own projects
+      const projects = await getUserProjects(userId);
+      project = projects.find((p) => p.id === projectId);
+    }
 
     if (!project) {
       return NextResponse.json(
