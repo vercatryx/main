@@ -52,6 +52,7 @@ async function getAllProjects(): Promise<ProjectStore> {
     }
 
     const data = await response.json();
+    console.log('Successfully read projects from blob:', JSON.stringify(data, null, 2));
     return data as ProjectStore;
   } catch (error) {
     console.error('Error reading projects from blob:', error);
@@ -69,12 +70,16 @@ async function saveAllProjects(projects: ProjectStore): Promise<void> {
       throw new Error('BLOB_READ_WRITE_TOKEN not configured. Cannot save projects.');
     }
 
-    await put(BLOB_FILENAME, JSON.stringify(projects, null, 2), {
+    console.log('Saving projects to blob:', JSON.stringify(projects, null, 2));
+
+    const result = await put(BLOB_FILENAME, JSON.stringify(projects, null, 2), {
       access: 'public',
       contentType: 'application/json',
       addRandomSuffix: false,
       allowOverwrite: true,
     });
+
+    console.log('Successfully saved projects to blob:', result.url);
   } catch (error) {
     console.error('Error writing projects to blob:', error);
     throw error;
