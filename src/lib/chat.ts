@@ -4,11 +4,12 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const USE_FS = !process.env.BLOB_READ_WRITE_TOKEN;
 
 export interface ChatAttachment {
-  type: 'image' | 'file';
+  type: 'image' | 'file' | 'voice';
   url: string;
   filename: string;
   size: number;
   mimeType: string;
+  duration?: number; // Duration in seconds for voice notes
 }
 
 export interface ChatMessage {
@@ -188,6 +189,11 @@ export async function uploadChatFile(
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/plain',
+    'audio/webm',
+    'audio/mp4',
+    'audio/mpeg',
+    'audio/ogg',
+    'audio/wav',
   ];
 
   if (!allowedTypes.includes(file.type)) {
@@ -201,8 +207,16 @@ export async function uploadChatFile(
     addRandomSuffix: false,
   });
 
+  // Determine attachment type
+  let type: 'image' | 'file' | 'voice' = 'file';
+  if (file.type.startsWith('image/')) {
+    type = 'image';
+  } else if (file.type.startsWith('audio/')) {
+    type = 'voice';
+  }
+
   return {
-    type: file.type.startsWith('image/') ? 'image' : 'file',
+    type,
     url: blob.url,
     filename: file.name,
     size: file.size,

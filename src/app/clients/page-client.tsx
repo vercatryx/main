@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File, Download, Image as ImageIcon, Camera, Trash2 } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,11 +35,12 @@ interface ClientPortalProps {
 }
 
 interface ChatAttachment {
-  type: 'image' | 'file';
+  type: 'image' | 'file' | 'voice';
   url: string;
   filename: string;
   size: number;
   mimeType: string;
+  duration?: number;
 }
 
 interface ChatMessage {
@@ -94,11 +95,17 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const previousMessageCountRef = useRef<number>(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const { user } = useUser();
   const { getToken } = useAuth();
 
@@ -336,6 +343,123 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm'
+      });
+
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+    setAudioBlob(null);
+    setRecordingTime(0);
+  };
+
+  const sendVoiceNote = async () => {
+    if (!audioBlob || !chatProjectId) return;
+
+    try {
+      setUploadingFiles(true);
+
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const filename = `voice-${Date.now()}.webm`;
+      const file = new File([audioBlob], filename, { type: 'audio/webm' });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('messageId', messageId);
+
+      const uploadRes = await fetch(`/api/chat/${chatProjectId}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const error = await uploadRes.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      const attachment = await uploadRes.json();
+      attachment.duration = recordingTime;
+
+      const res = await fetch(`/api/chat/${chatProjectId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: '',
+          userId: user?.id,
+          userName: user?.fullName,
+          attachments: [attachment],
+        }),
+      });
+
+      if (res.ok) {
+        const newMessage = await res.json();
+        setMessages((prev) => [...prev, newMessage]);
+        setAudioBlob(null);
+        setRecordingTime(0);
+      }
+    } catch (error) {
+      console.error('Error sending voice note:', error);
+      alert(error instanceof Error ? error.message : 'Failed to send voice note');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
   const deleteAttachment = async (messageId: string, attachmentUrl: string, attachmentFilename: string) => {
     if (!chatProjectId || !isAdmin) return;
 
@@ -529,6 +653,25 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     </button>
                                   )}
                                 </div>
+                              ) : attachment.type === 'voice' ? (
+                                <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                  <Mic className="w-4 h-4 text-blue-400" />
+                                  <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                    <source src={attachment.url} type={attachment.mimeType} />
+                                  </audio>
+                                  {attachment.duration && (
+                                    <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                  )}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="text-red-400 hover:text-red-300"
+                                      title="Delete voice note"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
                                   <a
@@ -537,7 +680,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 flex-1 hover:text-gray-300"
                                   >
-                                    <File className="w-4 h-4" />
+                                    <FileIcon className="w-4 h-4" />
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
@@ -573,7 +716,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
-                        <File className="w-3 h-3" />
+                        <FileIcon className="w-3 h-3" />
                       )}
                       <span className="flex-1 truncate">{file.name}</span>
                       <span className="text-gray-400">{formatFileSize(file.size)}</span>
@@ -585,6 +728,37 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {audioBlob && (
+                <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
+                  <button
+                    onClick={sendVoiceNote}
+                    className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                    disabled={uploadingFiles}
+                  >
+                    Send
+                  </button>
+                  <button
+                    onClick={cancelRecording}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {isRecording && (
+                <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                  <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
+                  <button
+                    onClick={stopRecording}
+                    className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                  >
+                    <Square className="w-4 h-4" />
+                  </button>
                 </div>
               )}
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
@@ -600,16 +774,26 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`${
+                    isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
+                  } rounded-lg p-2`}
+                  disabled={uploadingFiles || audioBlob !== null}
+                >
+                  <Mic className="w-5 h-5" />
                 </button>
                 <input
                   ref={messageInputRef}
                   name="message"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
                   placeholder="Type a message..."
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -620,7 +804,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <button
                   type="submit"
                   className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -708,6 +892,25 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     </button>
                                   )}
                                 </div>
+                              ) : attachment.type === 'voice' ? (
+                                <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                  <Mic className="w-4 h-4 text-blue-400" />
+                                  <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                    <source src={attachment.url} type={attachment.mimeType} />
+                                  </audio>
+                                  {attachment.duration && (
+                                    <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                  )}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="text-red-400 hover:text-red-300"
+                                      title="Delete voice note"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
                                   <a
@@ -716,7 +919,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 flex-1 hover:text-gray-300"
                                   >
-                                    <File className="w-4 h-4" />
+                                    <FileIcon className="w-4 h-4" />
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
@@ -751,7 +954,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
-                        <File className="w-3 h-3" />
+                        <FileIcon className="w-3 h-3" />
                       )}
                       <span className="flex-1 truncate">{file.name}</span>
                       <span className="text-gray-400">{formatFileSize(file.size)}</span>
@@ -763,6 +966,37 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {audioBlob && (
+                <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
+                  <button
+                    onClick={sendVoiceNote}
+                    className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                    disabled={uploadingFiles}
+                  >
+                    Send
+                  </button>
+                  <button
+                    onClick={cancelRecording}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {isRecording && (
+                <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                  <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
+                  <button
+                    onClick={stopRecording}
+                    className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                  >
+                    <Square className="w-4 h-4" />
+                  </button>
                 </div>
               )}
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
@@ -778,16 +1012,26 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`${
+                    isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
+                  } rounded-lg p-2`}
+                  disabled={uploadingFiles || audioBlob !== null}
+                >
+                  <Mic className="w-5 h-5" />
                 </button>
                 <input
                   ref={messageInputRef}
                   name="message"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
                   placeholder="Type a message..."
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -798,7 +1042,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <button
                   type="submit"
                   className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
-                  disabled={uploadingFiles}
+                  disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1047,6 +1291,25 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                       </button>
                                     )}
                                   </div>
+                                ) : attachment.type === 'voice' ? (
+                                  <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                    <Mic className="w-4 h-4 text-blue-400" />
+                                    <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                      <source src={attachment.url} type={attachment.mimeType} />
+                                    </audio>
+                                    {attachment.duration && (
+                                      <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                    )}
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                        className="text-red-400 hover:text-red-300"
+                                        title="Delete voice note"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
                                     <a
@@ -1055,7 +1318,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-2 flex-1 hover:text-gray-300"
                                     >
-                                      <File className="w-4 h-4" />
+                                      <FileIcon className="w-4 h-4" />
                                       <span className="flex-1 truncate">{attachment.filename}</span>
                                       <Download className="w-3 h-3" />
                                     </a>
@@ -1090,7 +1353,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                         {file.type.startsWith('image/') ? (
                           <ImageIcon className="w-3 h-3" />
                         ) : (
-                          <File className="w-3 h-3" />
+                          <FileIcon className="w-3 h-3" />
                         )}
                         <span className="flex-1 truncate">{file.name}</span>
                         <span className="text-gray-400">{formatFileSize(file.size)}</span>
@@ -1102,6 +1365,37 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+                {audioBlob && (
+                  <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
+                    <button
+                      onClick={sendVoiceNote}
+                      className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                      disabled={uploadingFiles}
+                    >
+                      Send
+                    </button>
+                    <button
+                      onClick={cancelRecording}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {isRecording && (
+                  <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                    <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
+                    <button
+                      onClick={stopRecording}
+                      className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                    >
+                      <Square className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
@@ -1117,15 +1411,25 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
-                    disabled={uploadingFiles}
+                    disabled={uploadingFiles || isRecording}
                   >
                     <Paperclip className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className={`${
+                      isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
+                    } rounded-lg p-2`}
+                    disabled={uploadingFiles || audioBlob !== null}
+                  >
+                    <Mic className="w-5 h-5" />
                   </button>
                   <input
                     name="message"
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
                     placeholder="Type a message..."
-                    disabled={uploadingFiles}
+                    disabled={uploadingFiles || isRecording}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -1136,7 +1440,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   <button
                     type="submit"
                     className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
-                    disabled={uploadingFiles}
+                    disabled={uploadingFiles || isRecording}
                   >
                     {uploadingFiles ? (
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

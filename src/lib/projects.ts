@@ -50,7 +50,17 @@ async function getAllProjects(): Promise<ProjectStore> {
     const blob = sortedBlobs[0];
 
     console.log(`Found ${blobs.length} blob(s), using most recent from:`, blob.uploadedAt);
-    const response = await fetch(blob.url);
+
+    // Add timestamp to URL to bust cache
+    const urlWithTimestamp = `${blob.url}?t=${Date.now()}`;
+    const response = await fetch(urlWithTimestamp, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+    });
 
     // Check if response is ok and content-type is JSON
     if (!response.ok) {
