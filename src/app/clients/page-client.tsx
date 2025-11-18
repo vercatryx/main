@@ -126,6 +126,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Only show "no projects" message for regular users (admins always have the Admin project)
   if (currentProjects.length === 0 && !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white">
@@ -133,19 +134,6 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           <h2 className="text-2xl font-bold mb-4">No Projects Yet</h2>
           <p className="text-gray-400">
             Your admin will add projects for you soon!
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isAdmin && (!usersWithProjects || usersWithProjects.length === 0)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-4">No Client Projects</h2>
-          <p className="text-gray-400">
-            No clients have projects assigned yet. Add projects in the admin dashboard!
           </p>
         </div>
       </div>
@@ -169,26 +157,34 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         </div>
 
         {/* Admin User Selector */}
-        {isAdmin && usersWithProjects && usersWithProjects.length > 0 && (
+        {isAdmin && (
           <div className="p-4 border-b border-gray-800">
             <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
               <UserCircle className="w-4 h-4" />
               View Client Projects
             </label>
-            <select
-              value={selectedUserId || ''}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
-            >
-              {usersWithProjects.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user.projects.length} project{user.projects.length !== 1 ? 's' : ''})
-                </option>
-              ))}
-            </select>
-            {selectedUserId && (
-              <p className="text-xs text-gray-500 mt-1">
-                {usersWithProjects.find(u => u.id === selectedUserId)?.email}
+            {usersWithProjects && usersWithProjects.length > 0 ? (
+              <>
+                <select
+                  value={selectedUserId || ''}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                >
+                  {usersWithProjects.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.projects.length} project{user.projects.length !== 1 ? 's' : ''})
+                    </option>
+                  ))}
+                </select>
+                {selectedUserId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {usersWithProjects.find(u => u.id === selectedUserId)?.email}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 italic">
+                No clients have projects yet. Use the Admin dashboard to add projects.
               </p>
             )}
           </div>
