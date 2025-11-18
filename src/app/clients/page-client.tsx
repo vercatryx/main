@@ -36,10 +36,26 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       : null
   );
 
+  // Create admin project for admins
+  const adminProject: Project | null = isAdmin ? {
+    id: 'admin-dashboard',
+    userId: 'admin',
+    title: 'Admin',
+    url: '/admin',
+    description: 'User Management Dashboard',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } : null;
+
   // Get current projects based on admin or regular user
-  const currentProjects = isAdmin && usersWithProjects && selectedUserId
+  const userProjects = isAdmin && usersWithProjects && selectedUserId
     ? usersWithProjects.find(u => u.id === selectedUserId)?.projects || []
     : projects || [];
+
+  // For admins, prepend the admin project to the list
+  const currentProjects = isAdmin && adminProject
+    ? [adminProject, ...userProjects]
+    : userProjects;
 
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     currentProjects.length > 0 ? currentProjects[0] : null
@@ -51,30 +67,31 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
   // Update selected project when user changes (admin only)
   useEffect(() => {
-    if (isAdmin && selectedUserId && usersWithProjects) {
-      const user = usersWithProjects.find(u => u.id === selectedUserId);
-      if (user && user.projects.length > 0) {
-        setSelectedProject(user.projects[0]);
-      } else {
-        setSelectedProject(null);
-      }
+    if (isAdmin && selectedUserId && usersWithProjects && adminProject) {
+      // Always default to admin dashboard when user changes
+      setSelectedProject(adminProject);
     }
-  }, [selectedUserId, isAdmin, usersWithProjects]);
+  }, [selectedUserId, isAdmin, usersWithProjects, adminProject]);
 
   // Load project URL dynamically to hide it from HTML
   useEffect(() => {
     if (selectedProject && iframeRef.current) {
-      // Fetch the URL from our proxy endpoint
-      fetch(`/api/projects/proxy/${selectedProject.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.url && iframeRef.current) {
-            iframeRef.current.src = data.url;
-          }
-        })
-        .catch((error) => {
-          console.error('Error loading project:', error);
-        });
+      // For admin dashboard, load URL directly
+      if (selectedProject.id === 'admin-dashboard') {
+        iframeRef.current.src = selectedProject.url;
+      } else {
+        // For regular projects, fetch the URL from our proxy endpoint
+        fetch(`/api/projects/proxy/${selectedProject.id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.url && iframeRef.current) {
+              iframeRef.current.src = data.url;
+            }
+          })
+          .catch((error) => {
+            console.error('Error loading project:', error);
+          });
+      }
     }
   }, [selectedProject]);
 
