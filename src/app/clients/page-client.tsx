@@ -73,6 +73,11 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     }
   }, [selectedUserId, isAdmin, usersWithProjects, adminProject]);
 
+  // Debug: Log when selectedProject changes
+  useEffect(() => {
+    console.log('📌 Selected project changed:', selectedProject?.title, selectedProject?.id);
+  }, [selectedProject]);
+
   // Load project URL dynamically to hide it from HTML
   useEffect(() => {
     if (selectedProject && iframeRef.current) {
@@ -205,7 +210,10 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           {currentProjects.map((project) => (
             <button
               key={project.id}
-              onClick={() => setSelectedProject(project)}
+              onClick={() => {
+                console.log('🖱️ Project clicked:', project.title, project.id);
+                setSelectedProject(project);
+              }}
               className={`w-full text-left p-4 rounded-lg transition-colors ${
                 selectedProject?.id === project.id
                   ? 'bg-blue-600 text-white'
@@ -302,8 +310,10 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               ref={iframeRef}
               className="w-full h-full border-0"
               title={selectedProject.title}
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              onLoad={() => console.log('✅ Iframe loaded successfully')}
+              onError={(e) => console.error('❌ Iframe error:', e)}
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-gray-950 text-white">
