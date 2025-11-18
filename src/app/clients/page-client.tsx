@@ -122,14 +122,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   };
 
   // Initialize state from URL params or defaults
-  const [selectedProject, setSelectedProject] = useState<Project | null>(() => {
-    const projectIdFromUrl = searchParams.get('project');
-    if (projectIdFromUrl && currentProjects.length > 0) {
-      const project = currentProjects.find(p => p.id === projectIdFromUrl);
-      return project || (currentProjects.length > 0 ? currentProjects[0] : null);
-    }
-    return currentProjects.length > 0 ? currentProjects[0] : null;
-  });
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chatState, setChatState] = useState<'closed' | 'sidebar' | 'expanded'>(() => {
@@ -156,6 +149,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const audioChunksRef = useRef<Blob[]>([]);
   const { user } = useUser();
   const { getToken } = useAuth();
+
+  // Initialize selected project from URL or default
+  useEffect(() => {
+    if (currentProjects.length > 0 && !selectedProject) {
+      const projectIdFromUrl = searchParams.get('project');
+      if (projectIdFromUrl) {
+        const project = currentProjects.find(p => p.id === projectIdFromUrl);
+        setSelectedProject(project || currentProjects[0]);
+      } else {
+        setSelectedProject(currentProjects[0]);
+      }
+    }
+  }, [currentProjects.length, selectedProject]);
 
   // Detect mobile on mount
   useEffect(() => {
