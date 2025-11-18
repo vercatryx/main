@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProjectMessages, addMessage } from '@/lib/chat';
 
-type RouteParams = { params: { projectId: string } };
-
 export async function GET(
   req: NextRequest,
-  { params }: RouteParams
+  context: { params: Promise<{ projectId: string }> }
 ) {
-  const { projectId } = params;
+  const { projectId } = await context.params;
   const messages = await getProjectMessages(projectId);
 
   return NextResponse.json(messages);
@@ -15,9 +13,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: RouteParams
+  context: { params: Promise<{ projectId: string }> }
 ) {
-  const { projectId } = params;
+  const { projectId } = await context.params;
   const { message, userId, userName } = await req.json();
 
   if (!message) {
