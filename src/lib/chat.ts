@@ -1,4 +1,4 @@
-import { put, list, del } from '@vercel/blob';
+import { put, list, del, head } from '@vercel/blob';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 const USE_FS = !process.env.BLOB_READ_WRITE_TOKEN;
@@ -65,8 +65,11 @@ export async function getProjectMessages(projectId: string): Promise<ChatMessage
 
     console.log('Fetching latest messages from:', latestBlob.pathname, 'uploaded at:', latestBlob.uploadedAt);
 
-    // Fetch with strong cache-busting
-    const response = await fetch(latestBlob.url, {
+    // Use head() to get a fresh downloadUrl that won't expire quickly
+    const blobInfo = await head(latestBlob.url);
+
+    // Fetch with the fresh download URL
+    const response = await fetch(blobInfo.downloadUrl, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',

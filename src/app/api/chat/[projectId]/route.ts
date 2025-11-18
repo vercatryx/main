@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProjectMessages, addMessage } from '@/lib/chat';
+import { head } from '@vercel/blob';
 
 export async function GET(
   req: NextRequest,
@@ -8,7 +9,32 @@ export async function GET(
   const { projectId } = await context.params;
   const messages = await getProjectMessages(projectId);
 
-  return NextResponse.json(messages, {
+  // Refresh attachment URLs to prevent 403 errors
+  const messagesWithFreshUrls = await Promise.all(
+    messages.map(async (msg) => {
+      if (msg.attachments && msg.attachments.length > 0) {
+        const freshAttachments = await Promise.all(
+          msg.attachments.map(async (att) => {
+            try {
+              // Get fresh download URL that won't expire quickly
+              const blobInfo = await head(att.url);
+              return {
+                ...att,
+                url: blobInfo.downloadUrl,
+              };
+            } catch (error) {
+              console.error('Error refreshing attachment URL:', error);
+              return att; // Return original if refresh fails
+            }
+          })
+        );
+        return { ...msg, attachments: freshAttachments };
+      }
+      return msg;
+    })
+  );
+
+  return NextResponse.json(messagesWithFreshUrls, {
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate',
       'Pragma': 'no-cache',

@@ -352,9 +352,26 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      });
+
+      // Try different MIME types for better mobile compatibility
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/ogg;codecs=opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        // Fallback to default
+        mimeType = '';
+      }
+
+      const options = mimeType ? { mimeType } : {};
+      const mediaRecorder = new MediaRecorder(stream, options);
+      const actualMimeType = mediaRecorder.mimeType;
 
       audioChunksRef.current = [];
 
@@ -365,7 +382,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
         setAudioBlob(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -413,8 +430,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       setUploadingFiles(true);
 
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const filename = `voice-${Date.now()}.webm`;
-      const file = new File([audioBlob], filename, { type: 'audio/webm' });
+
+      // Get file extension from MIME type
+      let extension = 'webm';
+      if (audioBlob.type.includes('mp4')) {
+        extension = 'mp4';
+      } else if (audioBlob.type.includes('ogg')) {
+        extension = 'ogg';
+      } else if (audioBlob.type.includes('wav')) {
+        extension = 'wav';
+      }
+
+      const filename = `voice-${Date.now()}.${extension}`;
+      const file = new File([audioBlob], filename, { type: audioBlob.type });
 
       const formData = new FormData();
       formData.append('file', file);
@@ -656,8 +684,15 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                               ) : attachment.type === 'voice' ? (
                                 <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
                                   <Mic className="w-4 h-4 text-blue-400" />
-                                  <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                  <audio
+                                    controls
+                                    preload="metadata"
+                                    controlsList="nodownload"
+                                    className="h-8 flex-1"
+                                    style={{ maxWidth: '200px' }}
+                                  >
                                     <source src={attachment.url} type={attachment.mimeType} />
+                                    Your browser does not support audio playback.
                                   </audio>
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
@@ -895,8 +930,15 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                               ) : attachment.type === 'voice' ? (
                                 <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
                                   <Mic className="w-4 h-4 text-blue-400" />
-                                  <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                  <audio
+                                    controls
+                                    preload="metadata"
+                                    controlsList="nodownload"
+                                    className="h-8 flex-1"
+                                    style={{ maxWidth: '200px' }}
+                                  >
                                     <source src={attachment.url} type={attachment.mimeType} />
+                                    Your browser does not support audio playback.
                                   </audio>
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
