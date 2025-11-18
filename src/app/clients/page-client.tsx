@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File, Download, Image as ImageIcon, Camera, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,12 +34,21 @@ interface ClientPortalProps {
   usersWithProjects?: UserWithProjects[];
 }
 
+interface ChatAttachment {
+  type: 'image' | 'file';
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+}
+
 interface ChatMessage {
   id: string;
   userId: string;
   userName: string;
   message: string;
   timestamp: number;
+  attachments?: ChatAttachment[];
 }
 
 export default function ClientPortal({ projects, userName, isAdmin, usersWithProjects }: ClientPortalProps) {
@@ -80,29 +89,76 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chatState, setChatState] = useState<'closed' | 'sidebar' | 'expanded'>('closed');
+  const [isMobile, setIsMobile] = useState(false);
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+  const previousMessageCountRef = useRef<number>(0);
   const { user } = useUser();
   const { getToken } = useAuth();
 
+  // Detect mobile on mount
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    // Only auto-scroll if:
+    // 1. New messages were added (message count increased)
+    // 2. User is scrolled near the bottom (within 100px)
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    const hasNewMessages = messages.length > previousMessageCountRef.current;
+
+    if (hasNewMessages && isNearBottom) {
+      container.scrollTop = container.scrollHeight;
     }
+
+    previousMessageCountRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
     if (chatProjectId) {
       const fetchMessages = async () => {
-        const res = await fetch(`/api/chat/${chatProjectId}`);
+        const res = await fetch(`/api/chat/${chatProjectId}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
         const data = await res.json();
         setMessages(data);
       };
+
+      // Initial fetch
       fetchMessages();
+
+      // Poll for new messages every 2 seconds when chat is open
+      const pollInterval = setInterval(() => {
+        if (chatState !== 'closed') {
+          fetchMessages();
+        }
+      }, 2000);
+
+      // Cleanup interval on unmount or when chatProjectId changes
+      return () => clearInterval(pollInterval);
     }
-  }, [chatProjectId]);
+  }, [chatProjectId, chatState]);
   
   // Update selected project when user changes (admin only)
   useEffect(() => {
@@ -196,12 +252,197 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
   const getProjectForChat = () => currentProjects.find(p => p.id === chatProjectId);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+    // Focus the message input after selecting files
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 100);
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const input = form.elements.namedItem('message') as HTMLInputElement;
+    const message = input.value;
+
+    if ((!message.trim() && selectedFiles.length === 0) || !chatProjectId) {
+      return;
+    }
+
+    try {
+      setUploadingFiles(true);
+
+      // Generate message ID
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Upload files first if any
+      const attachments: ChatAttachment[] = [];
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('messageId', messageId);
+
+        const uploadRes = await fetch(`/api/chat/${chatProjectId}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const error = await uploadRes.json();
+          throw new Error(error.error || 'Upload failed');
+        }
+
+        const attachment = await uploadRes.json();
+        attachments.push(attachment);
+      }
+
+      // Send message with attachments
+      const res = await fetch(`/api/chat/${chatProjectId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message || '',
+          userId: user?.id,
+          userName: user?.fullName,
+          attachments: attachments.length > 0 ? attachments : undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const newMessage = await res.json();
+        setMessages((prev) => [...prev, newMessage]);
+        input.value = '';
+        setSelectedFiles([]);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert(error instanceof Error ? error.message : 'Failed to send message');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const deleteAttachment = async (messageId: string, attachmentUrl: string, attachmentFilename: string) => {
+    if (!chatProjectId || !isAdmin) return;
+
+    if (!confirm('Delete this attachment? This cannot be undone.')) return;
+
+    try {
+      // Immediately update UI to show deletion
+      setMessages(prevMessages =>
+        prevMessages.map(msg => {
+          if (msg.id === messageId && msg.attachments) {
+            const remainingAttachments = msg.attachments.filter(att => att.url !== attachmentUrl);
+
+            // If no attachments left and no message text, replace with deletion notice
+            if (remainingAttachments.length === 0 && (!msg.message || !msg.message.trim())) {
+              return {
+                ...msg,
+                message: `"${attachmentFilename}" was deleted`,
+                attachments: undefined
+              };
+            }
+
+            return {
+              ...msg,
+              attachments: remainingAttachments.length > 0 ? remainingAttachments : undefined
+            };
+          }
+          return msg;
+        })
+      );
+
+      // Delete on server in background
+      const res = await fetch(`/api/chat/${chatProjectId}/delete-attachment`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId, attachmentUrl }),
+      });
+
+      if (res.ok) {
+        // Give the server time to delete old blobs and create new one
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        // Fetch fresh data from server to ensure sync
+        const refreshRes = await fetch(`/api/chat/${chatProjectId}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
+        if (refreshRes.ok) {
+          const updatedMessages = await refreshRes.json();
+          console.log('Server sync: Updated messages received:', updatedMessages.length, 'messages');
+          setMessages(updatedMessages);
+        } else {
+          console.error('Failed to fetch after deletion');
+        }
+      } else {
+        // Revert the optimistic update on error
+        alert('Failed to delete attachment');
+        const refreshRes = await fetch(`/api/chat/${chatProjectId}?t=${Date.now()}`);
+        if (refreshRes.ok) {
+          const updatedMessages = await refreshRes.json();
+          setMessages(updatedMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Delete attachment error:', error);
+      alert('Failed to delete attachment');
+      // Revert optimistic update
+      const refreshRes = await fetch(`/api/chat/${chatProjectId}?t=${Date.now()}`);
+      if (refreshRes.ok) {
+        const updatedMessages = await refreshRes.json();
+        setMessages(updatedMessages);
+      }
+    }
+  };
+
+  const deleteEntireChat = async () => {
+    if (!chatProjectId || !isAdmin) return;
+
+    if (!confirm('Delete entire chat history? This will delete all messages and attachments. This cannot be undone.')) return;
+
+    try {
+      const res = await fetch(`/api/chat/${chatProjectId}/delete`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setMessages([]);
+        alert('Chat deleted successfully');
+      } else {
+        alert('Failed to delete chat');
+      }
+    } catch (error) {
+      console.error('Delete chat error:', error);
+      alert('Failed to delete chat');
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar - full width on mobile, toggleable on desktop */}
       <div
         className={`${
-          isSidebarOpen ? 'w-80' : 'w-0'
+          isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
         } bg-gray-900 border-r border-gray-800 transition-all duration-300 overflow-hidden flex flex-col`}
       >
         {chatState === 'sidebar' ? (
@@ -212,7 +453,16 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <h3 className="font-bold text-lg">
                   {getProjectForChat()?.title}
                 </h3>
-                <div>
+                <div className="flex items-center gap-1">
+                  {isAdmin && (
+                    <button
+                      onClick={deleteEntireChat}
+                      className="p-2 hover:bg-red-700 rounded-lg text-red-200"
+                      title="Delete entire chat"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setChatState('expanded')}
                     className="p-2 hover:bg-blue-700 rounded-lg"
@@ -250,9 +500,63 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                           : 'bg-gray-700 text-gray-200'
                       }`}
                     >
-                      <p className="font-bold text-sm">{msg.userName}</p>
-                      <p>{msg.message}</p>
-                      <p className="text-xs opacity-70 text-right">
+                      {msg.message && msg.message.trim() && (
+                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
+                          {msg.message}
+                        </p>
+                      )}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={msg.message && msg.message.trim() ? "mt-2 space-y-2" : "space-y-2"}>
+                          {msg.attachments.map((attachment, idx) => (
+                            <div key={idx} className="relative group">
+                              {attachment.type === 'image' ? (
+                                <div className="relative">
+                                  <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                      src={attachment.url}
+                                      alt={attachment.filename}
+                                      className="max-w-full rounded border border-gray-600"
+                                      style={{ maxHeight: '200px' }}
+                                    />
+                                  </a>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                  >
+                                    <File className="w-4 h-4" />
+                                    <span className="flex-1 truncate">{attachment.filename}</span>
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="text-red-400 hover:text-red-300 ml-1"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs opacity-70 text-right mt-1">
                         {new Date(msg.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
@@ -262,48 +566,249 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
             </div>
             {/* Chat Input */}
             <div className="p-4 border-t border-gray-800">
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const form = e.currentTarget;
-                  const input = form.elements.namedItem('message') as HTMLInputElement;
-                  const message = input.value;
-                  if (message.trim() && chatProjectId) {
-                    const res = await fetch(`/api/chat/${chatProjectId}`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        message,
-                        userId: user?.id,
-                        userName: user?.fullName,
-                      }),
-                    });
-                    if (res.ok) {
-                      const newMessage = await res.json();
-                      setMessages((prev) => [...prev, newMessage]);
-                      input.value = '';
-                    }
-                  }
-                }}
-                className="flex items-center gap-2"
-              >
+              {selectedFiles.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                      {file.type.startsWith('image/') ? (
+                        <ImageIcon className="w-3 h-3" />
+                      ) : (
+                        <File className="w-3 h-3" />
+                      )}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  multiple
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                  disabled={uploadingFiles}
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <input
+                  ref={messageInputRef}
                   name="message"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
                   placeholder="Type a message..."
+                  disabled={uploadingFiles}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2"
+                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                  disabled={uploadingFiles}
                 >
-                  <Send className="w-5 h-5" />
+                  {uploadingFiles ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
                 </button>
               </form>
             </div>
 
           </>
+        ) : chatState === 'expanded' && isMobile ? (
+          /* Mobile Expanded Chat - takes over entire screen */
+          <div className="w-full h-full bg-gray-800 flex flex-col">
+            <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold">
+                {getProjectForChat()?.title}
+              </h3>
+              <div className="flex items-center gap-1">
+                {isAdmin && (
+                  <button
+                    onClick={deleteEntireChat}
+                    className="p-2 hover:bg-red-700 rounded-lg text-red-400"
+                    title="Delete entire chat"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setChatState('sidebar')}
+                  className="p-2 hover:bg-gray-700 rounded-lg"
+                >
+                  <Minimize2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setChatState('closed')}
+                  className="p-2 hover:bg-gray-700 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
+              <div className="space-y-4">
+                {messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${
+                      msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <div
+                      className={`rounded-lg px-3 py-2 max-w-md ${
+                        msg.userId === user?.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-200'
+                      }`}
+                    >
+                      {msg.message && msg.message.trim() && (
+                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
+                          {msg.message}
+                        </p>
+                      )}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={msg.message && msg.message.trim() ? "mt-2 space-y-2" : "space-y-2"}>
+                          {msg.attachments.map((attachment, idx) => (
+                            <div key={idx} className="relative group">
+                              {attachment.type === 'image' ? (
+                                <div className="relative">
+                                  <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                      src={attachment.url}
+                                      alt={attachment.filename}
+                                      className="max-w-full rounded border border-gray-600"
+                                      style={{ maxHeight: '300px' }}
+                                    />
+                                  </a>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                  >
+                                    <File className="w-4 h-4" />
+                                    <span className="flex-1 truncate">{attachment.filename}</span>
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                      className="text-red-400 hover:text-red-300 ml-1"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs opacity-70 text-right mt-1">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-700">
+              {selectedFiles.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                      {file.type.startsWith('image/') ? (
+                        <ImageIcon className="w-3 h-3" />
+                      ) : (
+                        <File className="w-3 h-3" />
+                      )}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  multiple
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                  disabled={uploadingFiles}
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <input
+                  ref={messageInputRef}
+                  name="message"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                  placeholder="Type a message..."
+                  disabled={uploadingFiles}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                  disabled={uploadingFiles}
+                >
+                  {uploadingFiles ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
         ) : (
           <>
             {/* Sidebar Header */}
@@ -417,8 +922,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         )}
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content Area - hidden on mobile */}
+      <div className="hidden md:flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
         <div className="bg-gray-900 border-b border-gray-800 p-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -473,7 +978,16 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <h3 className="font-bold">
                   {getProjectForChat()?.title}
                 </h3>
-                <div>
+                <div className="flex items-center gap-1">
+                  {isAdmin && (
+                    <button
+                      onClick={deleteEntireChat}
+                      className="p-2 hover:bg-red-700 rounded-lg text-red-400"
+                      title="Delete entire chat"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setChatState('sidebar')}
                     className="p-2 hover:bg-gray-700 rounded-lg"
@@ -498,15 +1012,69 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       }`}
                     >
                       <div
-                        className={`rounded-lg px-3 py-2 max-w-xs ${
+                        className={`rounded-lg px-3 py-2 max-w-md ${
                           msg.userId === user?.id
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-700 text-gray-200'
                         }`}
                       >
-                        <p className="font-bold text-sm">{msg.userName}</p>
-                        <p>{msg.message}</p>
-                        <p className="text-xs opacity-70 text-right">
+                        {msg.message && msg.message.trim() && (
+                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
+                          {msg.message}
+                        </p>
+                      )}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className={msg.message && msg.message.trim() ? "mt-2 space-y-2" : "space-y-2"}>
+                            {msg.attachments.map((attachment, idx) => (
+                              <div key={idx} className="relative group">
+                                {attachment.type === 'image' ? (
+                                  <div className="relative">
+                                    <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+                                      <img
+                                        src={attachment.url}
+                                        alt={attachment.filename}
+                                        className="max-w-full rounded border border-gray-600"
+                                        style={{ maxHeight: '300px' }}
+                                      />
+                                    </a>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Delete attachment"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                    <a
+                                      href={attachment.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                    >
+                                      <File className="w-4 h-4" />
+                                      <span className="flex-1 truncate">{attachment.filename}</span>
+                                      <Download className="w-3 h-3" />
+                                    </a>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
+                                        className="text-red-400 hover:text-red-300 ml-1"
+                                        title="Delete attachment"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs opacity-70 text-right mt-1">
                           {new Date(msg.timestamp).toLocaleTimeString()}
                         </p>
                       </div>
@@ -515,41 +1083,66 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 </div>
               </div>
               <div className="p-4 border-t border-gray-700">
-                <form
-                                    onSubmit={async (e) => {
-                                      e.preventDefault();
-                                      const form = e.currentTarget;
-                                      const input = form.elements.namedItem('message') as HTMLInputElement;
-                                      const message = input.value;
-                                                          if (message.trim() && chatProjectId) {
-                                                            const res = await fetch(`/api/chat/${chatProjectId}`, {
-                                                              method: 'POST',
-                                                              headers: {
-                                                                'Content-Type': 'application/json',
-                                                              },
-                                                              body: JSON.stringify({
-                                                                message,
-                                                                userId: user?.id,
-                                                                userName: user?.fullName,
-                                                              }),
-                                                            });                                        if (res.ok) {
-                                          const newMessage = await res.json();
-                                          setMessages((prev) => [...prev, newMessage]);
-                                          input.value = '';
-                                        }
-                                      }
-                                    }}                  className="flex items-center gap-2"
-                >
+                {selectedFiles.length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                        {file.type.startsWith('image/') ? (
+                          <ImageIcon className="w-3 h-3" />
+                        ) : (
+                          <File className="w-3 h-3" />
+                        )}
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    multiple
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                    disabled={uploadingFiles}
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
                   <input
                     name="message"
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
                     placeholder="Type a message..."
+                    disabled={uploadingFiles}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
                   />
                   <button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2"
+                    className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                    disabled={uploadingFiles}
                   >
-                    <Send className="w-5 h-5" />
+                    {uploadingFiles ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
                   </button>
                 </form>
               </div>
@@ -560,7 +1153,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               className="w-full h-full border-0"
               title={selectedProject.title}
               sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-downloads allow-modals allow-pointer-lock allow-presentation"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; microphone; camera; geolocation; payment"
+              allow="accelerometer; autoplay; clipboard-write; clipboard-read; encrypted-media; gyroscope; picture-in-picture; fullscreen; microphone; camera; geolocation; payment; storage-access-by-user-activation"
               onLoad={() => console.log('✅ Iframe loaded successfully')}
               onError={(e) => console.error('❌ Iframe error:', e)}
             />

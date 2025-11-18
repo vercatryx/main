@@ -14,6 +14,12 @@ This is a Next.js 15 application with React + TypeScript for the frontend and ba
 - **Start production server**: `npm start`
 - **Run linter**: `npm run lint`
 
+## Important Development Notes
+
+- **DO NOT run `npm run build` to test changes** - Building is slow and unnecessary for testing. TypeScript compilation happens automatically during development.
+- Only run builds when specifically requested by the user or before deployment
+- Use TypeScript's language server for type checking during development instead
+
 ## Architecture
 
 ### Next.js App Router Structure

@@ -1,0 +1,11 @@
+I updated the file:
+`/Users/shloimieheimowitz/WebstormProjects/vercatryx/dietfantasy copy/app/api/auth/login/route.ts`
+
+The change I made was to modify the `Set-Cookie` header to include `SameSite=None; Secure;` instead of `SameSite=Lax;`.
+
+Specifically, I changed this line:
+`app_auth=ok; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`
+to:
+`app_auth=ok; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${7 * 24 * 60 * 60}`
+
+This change is crucial for the authentication cookie to be sent correctly when the `dietfantasy` application is embedded in a cross-origin iframe. If you have an "original" `dietfantasy` project that you intend to deploy, you will need to apply this same change to its `app/api/auth/login/route.ts` file.

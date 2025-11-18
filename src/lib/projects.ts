@@ -3,7 +3,7 @@ import * as fsProjects from './projects-fs';
 
 // Use file system storage in development, blob in production
 const isDevelopment = process.env.NODE_ENV === 'development';
-const USE_FS = isDevelopment || !process.env.BLOB_READ_WRITE_TOKEN;
+const USE_FS = !process.env.BLOB_READ_WRITE_TOKEN;
 
 export interface Project {
   id: string;

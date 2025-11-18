@@ -8,7 +8,12 @@ export async function GET(
   const { projectId } = await context.params;
   const messages = await getProjectMessages(projectId);
 
-  return NextResponse.json(messages);
+  return NextResponse.json(messages, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+    },
+  });
 }
 
 export async function POST(
@@ -16,16 +21,21 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await context.params;
-  const { message, userId, userName } = await req.json();
+  const { message, userId, userName, attachments } = await req.json();
 
-  if (!message) {
-    return new Response('Message is required', { status: 400 });
+  // Allow empty message if there are attachments
+  const hasMessage = message && message.trim();
+  const hasAttachments = attachments && attachments.length > 0;
+
+  if (!hasMessage && !hasAttachments) {
+    return new Response('Message or attachments required', { status: 400 });
   }
 
   const newMessage = await addMessage(projectId, {
     userId: userId || 'anonymous',
     userName: userName || 'Anonymous',
-    message,
+    message: message || '',
+    ...(hasAttachments && { attachments }),
   });
 
   return NextResponse.json(newMessage, { status: 201 });
