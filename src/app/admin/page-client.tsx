@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Edit2, Trash2, X, ChevronDown, ChevronUp, Video, Users } from "lucide-react";
 import { createUser, updateUserRole, deleteUser } from "./actions";
 import { SerializableUser } from "./page";
+import MeetingsManagement from "@/components/admin/meetings-management";
 
 interface Project {
   id: string;
@@ -35,6 +36,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [activeTab, setActiveTab] = useState<'users' | 'meetings'>('users');
   const [projectForm, setProjectForm] = useState({
     title: "",
     url: "",
@@ -159,8 +161,38 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
     <div>
       <h1 className="text-4xl font-bold mb-8">Admin Dashboard</h1>
 
-      {/* Create User Form */}
-      <div className="mb-12 bg-gray-900 rounded-lg p-6">
+      {/* Tabs */}
+      <div className="mb-8 flex gap-2 border-b border-gray-800">
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-6 py-3 font-medium transition-colors flex items-center gap-2 ${
+            activeTab === 'users'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Users className="w-5 h-5" />
+          Users & Projects
+        </button>
+        <button
+          onClick={() => setActiveTab('meetings')}
+          className={`px-6 py-3 font-medium transition-colors flex items-center gap-2 ${
+            activeTab === 'meetings'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Video className="w-5 h-5" />
+          Meetings
+        </button>
+      </div>
+
+      {activeTab === 'meetings' ? (
+        <MeetingsManagement users={users} />
+      ) : (
+        <>
+          {/* Create User Form */}
+          <div className="mb-12 bg-gray-900 rounded-lg p-6">
         <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
         <form action={createUser} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -351,6 +383,8 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
           })}
         </div>
       </div>
+        </>
+      )}
 
       {/* Project Modal */}
       {showProjectModal && (

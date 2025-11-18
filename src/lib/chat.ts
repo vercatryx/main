@@ -1,7 +1,6 @@
-import { put, list, del, head } from '@vercel/blob';
-
-const isDevelopment = process.env.NODE_ENV === 'development';
-const USE_FS = !process.env.BLOB_READ_WRITE_TOKEN;
+import { supabase } from './supabase';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export interface ChatAttachment {
   type: 'image' | 'file' | 'voice';
@@ -21,76 +20,67 @@ export interface ChatMessage {
   attachments?: ChatAttachment[];
 }
 
-function getBlobFilename(projectId: string, version?: number) {
-  if (version) {
-    return `chat-${projectId}-v${version}.json`;
-  }
-  return `chat-${projectId}.json`;
+// Database row type
+type ChatMessageRow = {
+  id: string;
+  project_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  attachments: any; // JSONB
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Convert ChatMessage to database row
+ * Note: We're storing timestamp as created_at, and userId/userName in the content
+ */
+function messageToRow(projectId: string, message: ChatMessage): Partial<ChatMessageRow> {
+  return {
+    id: message.id,
+    project_id: projectId,
+    role: 'user', // Default to user, can be changed based on your logic
+    content: JSON.stringify({
+      userId: message.userId,
+      userName: message.userName,
+      message: message.message,
+      timestamp: message.timestamp,
+    }),
+    attachments: message.attachments || [],
+  };
 }
 
-function getBaseBlobPrefix(projectId: string) {
-  return `chat-${projectId}`;
+/**
+ * Convert database row to ChatMessage
+ */
+function rowToMessage(row: ChatMessageRow): ChatMessage {
+  const content = JSON.parse(row.content);
+  return {
+    id: row.id,
+    userId: content.userId,
+    userName: content.userName,
+    message: content.message,
+    timestamp: content.timestamp || new Date(row.created_at).getTime(),
+    attachments: row.attachments as ChatAttachment[],
+  };
 }
 
 /**
  * Get all chat messages for a project
  */
 export async function getProjectMessages(projectId: string): Promise<ChatMessage[]> {
-  if (USE_FS) {
-    // In development, we can mock this or use a local file if needed
-    console.warn('Chat FS implementation is not available. Returning empty array.');
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching chat messages:', error);
     return [];
   }
 
-  try {
-    const prefix = getBaseBlobPrefix(projectId);
-
-    // List all chat blobs for this project, sorted by upload time (newest first)
-    const { blobs } = await list({
-      prefix: prefix,
-      limit: 10,
-      mode: 'expanded'
-    });
-
-    if (blobs.length === 0) {
-      console.log('No messages found for project:', projectId);
-      return [];
-    }
-
-    // Get the most recently uploaded blob
-    const sortedBlobs = blobs.sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
-    const latestBlob = sortedBlobs[0];
-
-    console.log('Fetching latest messages from:', latestBlob.pathname, 'uploaded at:', latestBlob.uploadedAt);
-
-    // Use head() to get a fresh downloadUrl that won't expire quickly
-    const blobInfo = await head(latestBlob.url);
-
-    // Fetch with the fresh download URL
-    const response = await fetch(blobInfo.downloadUrl, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      },
-    });
-
-    if (!response.ok) {
-      console.error('Failed to fetch messages, status:', response.status);
-      return [];
-    }
-
-    const text = await response.text();
-    const messages = JSON.parse(text) as ChatMessage[];
-    console.log('Loaded', messages.length, 'messages for project:', projectId);
-    return messages;
-  } catch (error) {
-    console.error('Error reading chat messages from blob:', error);
-    return [];
-  }
+  return (data || []).map(rowToMessage);
 }
 
 /**
@@ -100,129 +90,121 @@ export async function addMessage(
   projectId: string,
   message: Omit<ChatMessage, 'id' | 'timestamp'>
 ): Promise<ChatMessage> {
-  const messages = await getProjectMessages(projectId);
-
   const newMessage: ChatMessage = {
     ...message,
     id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     timestamp: Date.now(),
   };
 
-  messages.push(newMessage);
+  const row = messageToRow(projectId, newMessage);
 
-  if (!USE_FS) {
-    // Use updateProjectMessages to ensure proper versioning
-    await updateProjectMessages(projectId, messages);
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding message:', error);
+    throw new Error(`Failed to add message: ${error.message}`);
   }
 
-  return newMessage;
+  return rowToMessage(data as ChatMessageRow);
 }
 
 /**
  * Update all messages for a project (used for editing/deleting)
+ * Note: This replaces all messages - use with caution
  */
 export async function updateProjectMessages(
   projectId: string,
   messages: ChatMessage[]
 ): Promise<void> {
-  if (USE_FS) {
-    console.warn('Cannot update messages in FS mode (no BLOB_READ_WRITE_TOKEN)');
-    return;
+  // Delete all existing messages for the project
+  const { error: deleteError } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('project_id', projectId);
+
+  if (deleteError) {
+    console.error('Error deleting messages:', deleteError);
+    throw new Error(`Failed to delete messages: ${deleteError.message}`);
   }
 
-  try {
-    // Delete ALL old chat blobs for this project
-    const prefix = getBaseBlobPrefix(projectId);
-    const { blobs } = await list({ prefix });
+  // Insert new messages
+  if (messages.length > 0) {
+    const rows = messages.map(msg => messageToRow(projectId, msg));
 
-    console.log('Deleting', blobs.length, 'old chat blobs for project:', projectId);
-    for (const blob of blobs) {
-      try {
-        await del(blob.url);
-        console.log('Deleted old blob:', blob.pathname);
-      } catch (delError) {
-        console.error('Error deleting blob:', blob.pathname, delError);
-      }
+    const { error: insertError } = await supabase
+      .from('chat_messages')
+      .insert(rows);
+
+    if (insertError) {
+      console.error('Error inserting messages:', insertError);
+      throw new Error(`Failed to insert messages: ${insertError.message}`);
     }
-
-    // Create new blob with a version timestamp to ensure unique URL
-    const version = Date.now();
-    const blobFilename = getBlobFilename(projectId, version);
-
-    const result = await put(blobFilename, JSON.stringify(messages, null, 2), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false,
-    });
-
-    console.log('Messages saved to new blob:', blobFilename, 'URL:', result.url);
-  } catch (error) {
-    console.error('Error updating messages:', error);
-    throw error;
   }
 }
 
 /**
- * Upload a file to Vercel Blob for chat attachments
+ * Delete a specific message
+ */
+export async function deleteMessage(messageId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('id', messageId);
+
+  if (error) {
+    console.error('Error deleting message:', error);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Upload a file to local storage for chat attachments
+ * TODO: Replace with Supabase Storage or S3 later
  */
 export async function uploadChatFile(
   projectId: string,
   messageId: string,
   file: File
 ): Promise<ChatAttachment> {
-  if (USE_FS) {
-    throw new Error('File uploads not available in development without BLOB_READ_WRITE_TOKEN');
-  }
+  // For now, save to local public directory
+  const fileBuffer = await file.arrayBuffer();
+  const filePath = path.join(process.cwd(), 'public', 'chat-files', projectId, messageId, file.name);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, Buffer.from(fileBuffer));
 
-  // Validate file size (25MB for images, 50MB for files)
-  const maxSize = file.type.startsWith('image/') ? 25 * 1024 * 1024 : 50 * 1024 * 1024;
-  if (file.size > maxSize) {
-    throw new Error(`File size exceeds ${maxSize / (1024 * 1024)}MB limit`);
-  }
-
-  // Validate file type
-  const allowedTypes = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-    'audio/webm',
-    'audio/mp4',
-    'audio/mpeg',
-    'audio/ogg',
-    'audio/wav',
-  ];
-
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error('File type not allowed');
-  }
-
-  // Upload to Vercel Blob
-  const filename = `chat-files/${projectId}/${messageId}/${file.name}`;
-  const blob = await put(filename, file, {
-    access: 'public',
-    addRandomSuffix: false,
-  });
-
-  // Determine attachment type
-  let type: 'image' | 'file' | 'voice' = 'file';
+  // Determine attachment type based on file type and name
+  let attachmentType: 'image' | 'file' | 'voice' = 'file';
   if (file.type.startsWith('image/')) {
-    type = 'image';
-  } else if (file.type.startsWith('audio/')) {
-    type = 'voice';
+    attachmentType = 'image';
+  } else if (file.type.startsWith('audio/') || file.name.startsWith('voice-')) {
+    attachmentType = 'voice';
   }
 
-  return {
-    type,
-    url: blob.url,
+  const attachment: ChatAttachment = {
+    type: attachmentType,
+    url: `/chat-files/${projectId}/${messageId}/${file.name}`,
     filename: file.name,
     size: file.size,
     mimeType: file.type,
   };
+
+  return attachment;
+}
+
+/**
+ * Delete a chat file
+ */
+export async function deleteChatFile(fileUrl: string): Promise<void> {
+  try {
+    const filePath = path.join(process.cwd(), 'public', fileUrl);
+    await fs.unlink(filePath);
+  } catch (error) {
+    console.error('Error deleting chat file:', error);
+  }
 }

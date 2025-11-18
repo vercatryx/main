@@ -1,0 +1,169 @@
+import { auth, clerkClient } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import {
+  getMeeting,
+  updateMeeting,
+  deleteMeeting,
+  updateMeetingStatus,
+} from '@/lib/meetings';
+
+interface RouteContext {
+  params: Promise<{ meetingId: string }>;
+}
+
+// GET /api/meetings/[meetingId] - Get a specific meeting
+export async function GET(request: Request, context: RouteContext) {
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { meetingId } = await context.params;
+    const meeting = await getMeeting(meetingId);
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+    }
+
+    // Check if user has access to this meeting
+    if (
+      meeting.hostUserId !== userId &&
+      !meeting.participantUserIds.includes(userId)
+    ) {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };
+
+      if (publicMetadata?.role !== 'superuser') {
+        return NextResponse.json(
+          { error: 'Access denied' },
+          { status: 403 }
+        );
+      }
+    }
+
+    return NextResponse.json({ meeting });
+  } catch (error) {
+    console.error('Error fetching meeting:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch meeting' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/meetings/[meetingId] - Update a meeting
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { meetingId } = await context.params;
+    const meeting = await getMeeting(meetingId);
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+    }
+
+    // Only host or superuser can update meeting
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };
+
+    if (meeting.hostUserId !== userId && publicMetadata?.role !== 'superuser') {
+      return NextResponse.json(
+        { error: 'Only the host or admin can update this meeting' },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { status, ...updates } = body;
+
+    let updatedMeeting;
+
+    // Handle status updates separately
+    if (status) {
+      const additionalData: { startedAt?: string; endedAt?: string } = {};
+
+      if (status === 'in-progress' && !meeting.startedAt) {
+        additionalData.startedAt = new Date().toISOString();
+      }
+
+      if (status === 'completed' && !meeting.endedAt) {
+        additionalData.endedAt = new Date().toISOString();
+      }
+
+      updatedMeeting = await updateMeetingStatus(meetingId, status, additionalData);
+    } else {
+      updatedMeeting = await updateMeeting(meetingId, updates);
+    }
+
+    if (!updatedMeeting) {
+      return NextResponse.json(
+        { error: 'Failed to update meeting' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ meeting: updatedMeeting });
+  } catch (error) {
+    console.error('Error updating meeting:', error);
+    return NextResponse.json(
+      { error: 'Failed to update meeting' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/meetings/[meetingId] - Delete a meeting
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { meetingId } = await context.params;
+    const meeting = await getMeeting(meetingId);
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+    }
+
+    // Only host or superuser can delete meeting
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };
+
+    if (meeting.hostUserId !== userId && publicMetadata?.role !== 'superuser') {
+      return NextResponse.json(
+        { error: 'Only the host or admin can delete this meeting' },
+        { status: 403 }
+      );
+    }
+
+    const deleted = await deleteMeeting(meetingId);
+
+    if (!deleted) {
+      return NextResponse.json(
+        { error: 'Failed to delete meeting' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting meeting:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete meeting' },
+      { status: 500 }
+    );
+  }
+}

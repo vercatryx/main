@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { del, list } from '@vercel/blob';
 import { auth } from '@clerk/nextjs/server';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export async function DELETE(
   req: NextRequest,
@@ -16,19 +17,22 @@ export async function DELETE(
 
     const { projectId } = await context.params;
 
-    // Delete all chat files for this project
-    const { blobs } = await list({ prefix: `chat-files/${projectId}/` });
-
-    for (const blob of blobs) {
-      await del(blob.url);
+    // Delete the chat messages JSON file
+    const chatFilePath = path.join(process.cwd(), 'data', 'chat', `${projectId}.json`);
+    try {
+      await fs.unlink(chatFilePath);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') { // Ignore if file doesn't exist
+        console.error('Error deleting chat JSON file:', error);
+      }
     }
 
-    // Delete the chat messages JSON file
-    const chatFile = `chat-${projectId}.json`;
-    const { blobs: chatBlobs } = await list({ prefix: chatFile });
-
-    for (const blob of chatBlobs) {
-      await del(blob.url);
+    // Delete the chat files directory
+    const chatFilesDirPath = path.join(process.cwd(), 'public', 'chat-files', projectId);
+    try {
+      await fs.rm(chatFilesDirPath, { recursive: true, force: true });
+    } catch (error) {
+      console.error('Error deleting chat files directory:', error);
     }
 
     return NextResponse.json({ success: true });

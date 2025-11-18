@@ -1,4 +1,4 @@
-import { put, list } from '@vercel/blob';
+import { supabase } from './supabase';
 
 export interface AvailabilityRequest {
   id: string;
@@ -12,124 +12,90 @@ export interface AvailabilityRequest {
   respondedAt?: string;
 }
 
-interface AvailabilityStore {
-  [key: string]: AvailabilityRequest;
-}
-
-const BLOB_FILENAME = 'availability-requests.json';
+// Database row type (snake_case from Supabase)
+type AvailabilityRequestRow = {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string;
+  message: string | null;
+  status: 'pending' | 'available' | 'unavailable' | 'timeout';
+  created_at: string;
+  responded_at: string | null;
+};
 
 /**
- * Get all availability requests from blob storage
+ * Convert database row to AvailabilityRequest object (snake_case to camelCase)
  */
-async function getAllRequests(): Promise<AvailabilityStore> {
-  try {
-    // Check if Blob token is configured
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      console.warn('BLOB_READ_WRITE_TOKEN not configured. Availability requests will not be persisted.');
-      return {};
-    }
-
-    // List blobs to find our file
-    const { blobs } = await list({ prefix: BLOB_FILENAME });
-
-    if (blobs.length === 0) {
-      console.log('No availability requests blob found, returning empty store');
-      return {};
-    }
-
-    // Sort by uploadedAt to get the most recent blob
-    const sortedBlobs = blobs.sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
-    const blob = sortedBlobs[0];
-
-    console.log(`Found ${blobs.length} availability blob(s), using most recent from:`, blob.uploadedAt);
-    const response = await fetch(blob.url);
-
-    // Check if response is ok and content-type is JSON
-    if (!response.ok) {
-      console.error(`Failed to fetch blob: ${response.status} ${response.statusText}`);
-      return {};
-    }
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.error(`Blob returned non-JSON content-type: ${contentType}`);
-      const text = await response.text();
-      console.error('Response preview:', text.substring(0, 200));
-      return {};
-    }
-
-    const data = await response.json();
-    return data as AvailabilityStore;
-  } catch (error) {
-    console.error('Error reading from blob:', error);
-    // If blob doesn't exist, return empty object
-    return {};
-  }
+function rowToRequest(row: AvailabilityRequestRow): AvailabilityRequest {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    company: row.company || undefined,
+    phone: row.phone,
+    message: row.message || undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    respondedAt: row.responded_at || undefined,
+  };
 }
 
 /**
- * Save all availability requests to blob storage
+ * Convert AvailabilityRequest object to database row (camelCase to snake_case)
  */
-async function saveAllRequests(requests: AvailabilityStore): Promise<void> {
-  try {
-    // Check if Blob token is configured
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      throw new Error('BLOB_READ_WRITE_TOKEN not configured. Cannot save availability requests. Please configure Vercel Blob storage.');
-    }
+function requestToRow(request: Partial<AvailabilityRequest>): Partial<AvailabilityRequestRow> {
+  const row: Partial<AvailabilityRequestRow> = {};
 
-    await put(BLOB_FILENAME, JSON.stringify(requests, null, 2), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false, // Important: don't add random suffix to filename
-      allowOverwrite: true, // Allow updating the existing blob
-    });
-  } catch (error) {
-    console.error('Error writing to blob:', error);
-    throw error;
-  }
-}
+  if (request.id !== undefined) row.id = request.id;
+  if (request.name !== undefined) row.name = request.name;
+  if (request.email !== undefined) row.email = request.email;
+  if (request.company !== undefined) row.company = request.company || null;
+  if (request.phone !== undefined) row.phone = request.phone;
+  if (request.message !== undefined) row.message = request.message || null;
+  if (request.status !== undefined) row.status = request.status;
+  if (request.createdAt !== undefined) row.created_at = request.createdAt;
+  if (request.respondedAt !== undefined) row.responded_at = request.respondedAt || null;
 
-/**
- * Clean up old requests (older than 24 hours)
- */
-function cleanupOldRequests(requests: AvailabilityStore): AvailabilityStore {
-  const now = new Date();
-  const cleaned: AvailabilityStore = {};
-
-  for (const [id, request] of Object.entries(requests)) {
-    const createdAt = new Date(request.createdAt);
-    const diffHours = (now.getTime() - createdAt.getTime()) / 1000 / 60 / 60;
-
-    // Keep requests that are less than 24 hours old
-    if (diffHours < 24) {
-      cleaned[id] = request;
-    }
-  }
-
-  return cleaned;
+  return row;
 }
 
 /**
  * Save an availability request to the database
  */
 export async function saveAvailabilityRequest(request: AvailabilityRequest): Promise<void> {
-  let requests = await getAllRequests();
+  const row = requestToRow(request);
 
-  // Clean up old requests before saving
-  requests = cleanupOldRequests(requests);
+  const { error } = await supabase
+    .from('availability_requests')
+    .insert(row);
 
-  requests[request.id] = request;
-  await saveAllRequests(requests);
+  if (error) {
+    console.error('Error saving availability request:', error);
+    throw new Error(`Failed to save availability request: ${error.message}`);
+  }
 }
 
 /**
  * Get an availability request from the database
  */
 export async function getAvailabilityRequest(id: string): Promise<AvailabilityRequest | null> {
-  const requests = await getAllRequests();
-  return requests[id] || null;
+  const { data, error } = await supabase
+    .from('availability_requests')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null; // Not found
+    }
+    console.error('Error getting availability request:', error);
+    return null;
+  }
+
+  return data ? rowToRequest(data as AvailabilityRequestRow) : null;
 }
 
 /**
@@ -139,20 +105,24 @@ export async function updateAvailabilityStatus(
   id: string,
   status: 'available' | 'unavailable' | 'timeout'
 ): Promise<AvailabilityRequest | null> {
-  const requests = await getAllRequests();
-  const request = requests[id];
+  const updates: Partial<AvailabilityRequestRow> = {
+    status,
+    responded_at: new Date().toISOString(),
+  };
 
-  if (!request) {
+  const { data, error } = await supabase
+    .from('availability_requests')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating availability status:', error);
     return null;
   }
 
-  request.status = status;
-  request.respondedAt = new Date().toISOString();
-
-  requests[id] = request;
-  await saveAllRequests(requests);
-
-  return request;
+  return data ? rowToRequest(data as AvailabilityRequestRow) : null;
 }
 
 /**

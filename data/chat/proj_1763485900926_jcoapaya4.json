@@ -1,0 +1,42 @@
+[
+  {
+    "userId": "user_35clHYR7etFwa8n9kM5w6W0Ap5l",
+    "userName": "David Heimowitz",
+    "message": "other text ",
+    "id": "msg_1763487549159_mr7apdpww",
+    "timestamp": 1763487549159
+  },
+  {
+    "userId": "user_35clHYR7etFwa8n9kM5w6W0Ap5l",
+    "userName": "David Heimowitz",
+    "message": "",
+    "attachments": [
+      {
+        "type": "image",
+        "url": "/chat-files/proj_1763485900926_jcoapaya4/msg_1763487572972_bvyv99jfv/SS 2025-11-17 at 12.22.44 PM.png",
+        "filename": "SS 2025-11-17 at 12.22.44 PM.png",
+        "size": 218742,
+        "mimeType": "image/png"
+      }
+    ],
+    "id": "msg_1763487573587_bv3o7r244",
+    "timestamp": 1763487573587
+  },
+  {
+    "userId": "user_35clHYR7etFwa8n9kM5w6W0Ap5l",
+    "userName": "David Heimowitz",
+    "message": "",
+    "attachments": [
+      {
+        "type": "voice",
+        "url": "/chat-files/proj_1763485900926_jcoapaya4/msg_1763488525090_80kq8psaj/voice-1763488525090.webm",
+        "filename": "voice-1763488525090.webm",
+        "size": 110,
+        "mimeType": "audio/webm;codecs=opus",
+        "duration": 4
+      }
+    ],
+    "id": "msg_1763488525645_gr6bkmj2d",
+    "timestamp": 1763488525645
+  }
+]

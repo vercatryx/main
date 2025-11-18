@@ -58,16 +58,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const searchParams = useSearchParams();
 
   // For admin: track selected user and get their projects
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(() => {
-    if (isAdmin && usersWithProjects && usersWithProjects.length > 0) {
-      const userIdFromUrl = searchParams.get('userId');
-      if (userIdFromUrl && usersWithProjects.find(u => u.id === userIdFromUrl)) {
-        return userIdFromUrl;
-      }
-      return usersWithProjects[0].id;
-    }
-    return null;
-  });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Create admin project for admins (useMemo to prevent infinite loop)
   const adminProject: Project | null = useMemo(() =>
@@ -94,12 +85,9 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     : userProjects;
 
   // Helper function to update URL
-  const updateURL = useCallback((params: { projectId?: string; chat?: string; chatState?: string; userId?: string }) => {
+  const updateURL = useCallback((params: { chat?: string; chatState?: string; userId?: string; project?: string }) => {
     const newParams = new URLSearchParams(searchParams.toString());
 
-    if (params.projectId) {
-      newParams.set('project', params.projectId);
-    }
     if (params.chat !== undefined) {
       if (params.chat) {
         newParams.set('chat', params.chat);
@@ -114,8 +102,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         newParams.delete('chatState');
       }
     }
-    if (params.userId) {
-      newParams.set('userId', params.userId);
+    if (params.userId !== undefined) {
+      if (params.userId) {
+        newParams.set('userId', params.userId);
+      } else {
+        newParams.delete('userId');
+      }
+    }
+    if (params.project !== undefined) {
+      if (params.project) {
+        newParams.set('project', params.project);
+      } else {
+        newParams.delete('project');
+      }
     }
 
     router.replace(`/clients?${newParams.toString()}`, { scroll: false });
@@ -133,6 +132,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [chatProjectId, setChatProjectId] = useState<string | null>(() => {
     return searchParams.get('chat') || null;
   });
+  const projectIdFromUrlRef = useRef<string | null>(searchParams.get('project'));
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -151,19 +151,49 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const { getToken } = useAuth();
   const hasInitialized = useRef(false);
 
-  // Initialize selected project from URL or default (only once)
+  // Initialize selected user (admin only) from URL or default (only once)
   useEffect(() => {
-    if (currentProjects.length > 0 && !hasInitialized.current) {
-      hasInitialized.current = true;
-      const projectIdFromUrl = searchParams.get('project');
+    if (isAdmin && usersWithProjects && usersWithProjects.length > 0 && selectedUserId === null) {
+      const userIdFromUrl = searchParams.get('userId');
+      if (userIdFromUrl && usersWithProjects.find(u => u.id === userIdFromUrl)) {
+        setSelectedUserId(userIdFromUrl);
+      } else {
+        setSelectedUserId(usersWithProjects[0].id);
+      }
+    }
+  }, [isAdmin, usersWithProjects, searchParams, selectedUserId]);
+
+  // Initialize selected project from URL or default
+  useEffect(() => {
+    // For admins, wait until selectedUserId is set before initializing
+    const isAdminReady = !isAdmin || (isAdmin && selectedUserId !== null);
+
+    if (currentProjects.length > 0 && !hasInitialized.current && isAdminReady) {
+      const projectIdFromUrl = projectIdFromUrlRef.current;
+
+      // Try to find the project from URL
       if (projectIdFromUrl) {
-        const project = currentProjects.find(p => p.id === projectIdFromUrl);
-        setSelectedProject(project || currentProjects[0]);
+        const projectFromUrl = currentProjects.find(p => p.id === projectIdFromUrl);
+        if (projectFromUrl) {
+          console.log('🔄 Restoring project from URL:', projectFromUrl.title, projectFromUrl.id);
+          setSelectedProject(projectFromUrl);
+          hasInitialized.current = true;
+          return;
+        } else {
+          console.log('⚠️ Project from URL not found:', projectIdFromUrl);
+        }
+      }
+
+      // Default: If there is more than one project, and the first one is the admin dashboard, select the second one.
+      console.log('🆕 No URL project found, using default');
+      if (currentProjects.length > 1 && currentProjects[0].id === 'admin-dashboard') {
+        setSelectedProject(currentProjects[1]);
       } else {
         setSelectedProject(currentProjects[0]);
       }
+      hasInitialized.current = true;
     }
-  }, [currentProjects, searchParams]);
+  }, [currentProjects, isAdmin, selectedUserId]);
 
   // Detect mobile on mount
   useEffect(() => {
@@ -177,29 +207,17 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Sync selected project to URL
-  useEffect(() => {
-    if (selectedProject && hasInitialized.current) {
-      updateURL({ projectId: selectedProject.id });
-    }
-  }, [selectedProject?.id, updateURL]);
-
-  // Sync chat state to URL
+  // Sync state to URL (combined to prevent race conditions)
   useEffect(() => {
     if (hasInitialized.current) {
       updateURL({
         chat: chatProjectId || undefined,
-        chatState: chatState
+        chatState: chatState,
+        userId: isAdmin && selectedUserId ? selectedUserId : undefined,
+        project: selectedProject?.id || undefined,
       });
     }
-  }, [chatProjectId, chatState, updateURL]);
-
-  // Sync selected user (admin only) to URL
-  useEffect(() => {
-    if (isAdmin && selectedUserId && hasInitialized.current) {
-      updateURL({ userId: selectedUserId });
-    }
-  }, [selectedUserId, isAdmin, updateURL]);
+  }, [chatProjectId, chatState, selectedUserId, selectedProject, isAdmin, updateURL]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -235,23 +253,29 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       // Initial fetch
       fetchMessages();
 
-      // Poll for new messages every 2 seconds when chat is open
+      // Poll for new messages every 5 seconds when chat is open
       const pollInterval = setInterval(() => {
         if (chatState !== 'closed') {
           fetchMessages();
         }
-      }, 2000);
+      }, 5000);
 
       // Cleanup interval on unmount or when chatProjectId changes
       return () => clearInterval(pollInterval);
     }
   }, [chatProjectId, chatState]);
   
-  // Update selected project when user changes (admin only)
+  // Update selected project when user changes (admin only) - but only after initialization
+  const previousUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isAdmin && selectedUserId && usersWithProjects && adminProject) {
-      // Always default to admin dashboard when user changes
-      setSelectedProject(adminProject);
+    if (isAdmin && selectedUserId && usersWithProjects && adminProject && hasInitialized.current) {
+      // Only reset to admin dashboard if the user actually changed (not on initial load)
+      if (previousUserIdRef.current !== null && previousUserIdRef.current !== selectedUserId) {
+        console.log('👤 User changed, resetting to admin dashboard');
+        setSelectedProject(adminProject);
+      }
+      previousUserIdRef.current = selectedUserId;
     }
   }, [selectedUserId, isAdmin, usersWithProjects, adminProject]);
 
@@ -1416,8 +1440,15 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                 ) : attachment.type === 'voice' ? (
                                   <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
                                     <Mic className="w-4 h-4 text-blue-400" />
-                                    <audio controls className="h-8 flex-1" style={{ maxWidth: '200px' }}>
+                                    <audio
+                                      controls
+                                      preload="metadata"
+                                      controlsList="nodownload"
+                                      className="h-8 flex-1"
+                                      style={{ maxWidth: '200px' }}
+                                    >
                                       <source src={attachment.url} type={attachment.mimeType} />
+                                      Your browser does not support audio playback.
                                     </audio>
                                     {attachment.duration && (
                                       <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
