@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square } from "lucide-react";
 import {
   DropdownMenu,
@@ -53,12 +54,20 @@ interface ChatMessage {
 }
 
 export default function ClientPortal({ projects, userName, isAdmin, usersWithProjects }: ClientPortalProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   // For admin: track selected user and get their projects
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(
-    isAdmin && usersWithProjects && usersWithProjects.length > 0
-      ? usersWithProjects[0].id
-      : null
-  );
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(() => {
+    if (isAdmin && usersWithProjects && usersWithProjects.length > 0) {
+      const userIdFromUrl = searchParams.get('userId');
+      if (userIdFromUrl && usersWithProjects.find(u => u.id === userIdFromUrl)) {
+        return userIdFromUrl;
+      }
+      return usersWithProjects[0].id;
+    }
+    return null;
+  });
 
   // Create admin project for admins (useMemo to prevent infinite loop)
   const adminProject: Project | null = useMemo(() =>
@@ -84,14 +93,53 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     ? [adminProject, ...userProjects]
     : userProjects;
 
-  const [selectedProject, setSelectedProject] = useState<Project | null>(
-    currentProjects.length > 0 ? currentProjects[0] : null
-  );
+  // Helper function to update URL
+  const updateURL = (params: { projectId?: string; chat?: string; chatState?: string; userId?: string }) => {
+    const newParams = new URLSearchParams(searchParams.toString());
+
+    if (params.projectId) {
+      newParams.set('project', params.projectId);
+    }
+    if (params.chat !== undefined) {
+      if (params.chat) {
+        newParams.set('chat', params.chat);
+      } else {
+        newParams.delete('chat');
+      }
+    }
+    if (params.chatState !== undefined) {
+      if (params.chatState && params.chatState !== 'closed') {
+        newParams.set('chatState', params.chatState);
+      } else {
+        newParams.delete('chatState');
+      }
+    }
+    if (params.userId) {
+      newParams.set('userId', params.userId);
+    }
+
+    router.replace(`/clients?${newParams.toString()}`, { scroll: false });
+  };
+
+  // Initialize state from URL params or defaults
+  const [selectedProject, setSelectedProject] = useState<Project | null>(() => {
+    const projectIdFromUrl = searchParams.get('project');
+    if (projectIdFromUrl && currentProjects.length > 0) {
+      const project = currentProjects.find(p => p.id === projectIdFromUrl);
+      return project || (currentProjects.length > 0 ? currentProjects[0] : null);
+    }
+    return currentProjects.length > 0 ? currentProjects[0] : null;
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [chatState, setChatState] = useState<'closed' | 'sidebar' | 'expanded'>('closed');
+  const [chatState, setChatState] = useState<'closed' | 'sidebar' | 'expanded'>(() => {
+    const chatStateFromUrl = searchParams.get('chatState');
+    return (chatStateFromUrl as 'closed' | 'sidebar' | 'expanded') || 'closed';
+  });
   const [isMobile, setIsMobile] = useState(false);
-  const [chatProjectId, setChatProjectId] = useState<string | null>(null);
+  const [chatProjectId, setChatProjectId] = useState<string | null>(() => {
+    return searchParams.get('chat') || null;
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -120,6 +168,28 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Sync selected project to URL
+  useEffect(() => {
+    if (selectedProject) {
+      updateURL({ projectId: selectedProject.id });
+    }
+  }, [selectedProject?.id]);
+
+  // Sync chat state to URL
+  useEffect(() => {
+    updateURL({
+      chat: chatProjectId || undefined,
+      chatState: chatState
+    });
+  }, [chatProjectId, chatState]);
+
+  // Sync selected user (admin only) to URL
+  useEffect(() => {
+    if (isAdmin && selectedUserId) {
+      updateURL({ userId: selectedUserId });
+    }
+  }, [selectedUserId, isAdmin]);
 
   useEffect(() => {
     const container = chatContainerRef.current;

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { currentUser, clerkClient } from "@clerk/nextjs/server";
 import { SignIn } from "@clerk/nextjs";
 import { getUserProjects, getAllUserProjects } from "@/lib/projects";
@@ -61,11 +62,13 @@ export default async function ClientsPage() {
       }));
 
     return (
-      <ClientPortal
-        userName={userName}
-        isAdmin={true}
-        usersWithProjects={usersWithProjects}
-      />
+      <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
+        <ClientPortal
+          userName={userName}
+          isAdmin={true}
+          usersWithProjects={usersWithProjects}
+        />
+      </Suspense>
     );
   }
 
@@ -73,10 +76,12 @@ export default async function ClientsPage() {
   const projects = await getUserProjects(user.id);
 
   return (
-    <ClientPortal
-      projects={projects}
-      userName={userName}
-      isAdmin={false}
-    />
+    <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
+      <ClientPortal
+        projects={projects}
+        userName={userName}
+        isAdmin={false}
+      />
+    </Suspense>
   );
 }
