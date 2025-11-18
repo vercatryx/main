@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send } from "lucide-react";
-import { SignOutButton, useUser } from "@clerk/nextjs";
+import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 
 interface Project {
   id: string;
@@ -78,12 +78,16 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { user } = useUser();
+  const { getToken } = useAuth();
 
   useEffect(() => {
     if (chatProjectId) {
-      fetch(`/api/chat/${chatProjectId}`)
-        .then((res) => res.json())
-        .then((data) => setMessages(data.reverse()));
+      const fetchMessages = async () => {
+        const res = await fetch(`/api/chat/${chatProjectId}`);
+        const data = await res.json();
+        setMessages(data.reverse());
+      };
+      fetchMessages();
     }
   }, [chatProjectId]);
   
@@ -254,7 +258,9 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   if (message.trim() && chatProjectId) {
                     const res = await fetch(`/api/chat/${chatProjectId}`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
                       body: JSON.stringify({
                         message,
                         userId: user?.id,
@@ -496,32 +502,29 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </div>
               <div className="p-4 border-t border-gray-700">
                 <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    console.log('Form submitted');
-                    const form = e.currentTarget;
-                    const input = form.elements.namedItem('message') as HTMLInputElement;
-                    const message = input.value;
-                    console.log('Message:', message);
-                    console.log('chatProjectId:', chatProjectId);
-                    if (message.trim() && chatProjectId) {
-                      const res = await fetch(`/api/chat/${chatProjectId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                        message,
-                        userId: user?.id,
-                        userName: user?.fullName,
-                      }),
-                      });
-                      if (res.ok) {
-                        const newMessage = await res.json();
-                        setMessages((prev) => [newMessage, ...prev]);
-                        input.value = '';
-                      }
-                    }
-                  }}
-                  className="flex items-center gap-2"
+                                    onSubmit={async (e) => {
+                                      e.preventDefault();
+                                      const form = e.currentTarget;
+                                      const input = form.elements.namedItem('message') as HTMLInputElement;
+                                      const message = input.value;
+                                                          if (message.trim() && chatProjectId) {
+                                                            const res = await fetch(`/api/chat/${chatProjectId}`, {
+                                                              method: 'POST',
+                                                              headers: {
+                                                                'Content-Type': 'application/json',
+                                                              },
+                                                              body: JSON.stringify({
+                                                                message,
+                                                                userId: user?.id,
+                                                                userName: user?.fullName,
+                                                              }),
+                                                            });                                        if (res.ok) {
+                                          const newMessage = await res.json();
+                                          setMessages((prev) => [newMessage, ...prev]);
+                                          input.value = '';
+                                        }
+                                      }
+                                    }}                  className="flex items-center gap-2"
                 >
                   <input
                     name="message"
