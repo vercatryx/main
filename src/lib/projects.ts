@@ -30,11 +30,27 @@ async function getAllProjects(): Promise<ProjectStore> {
     const { blobs } = await list({ prefix: BLOB_FILENAME });
 
     if (blobs.length === 0) {
+      console.log('No projects blob found, returning empty store');
       return {};
     }
 
     const blob = blobs[0];
     const response = await fetch(blob.url);
+
+    // Check if response is ok and content-type is JSON
+    if (!response.ok) {
+      console.error(`Failed to fetch blob: ${response.status} ${response.statusText}`);
+      return {};
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error(`Blob returned non-JSON content-type: ${contentType}`);
+      const text = await response.text();
+      console.error('Response preview:', text.substring(0, 200));
+      return {};
+    }
+
     const data = await response.json();
     return data as ProjectStore;
   } catch (error) {
