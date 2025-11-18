@@ -37,8 +37,13 @@ async function getAllRequests(): Promise<AvailabilityStore> {
       return {};
     }
 
-    // Get the most recent blob with this filename
-    const blob = blobs[0];
+    // Sort by uploadedAt to get the most recent blob
+    const sortedBlobs = blobs.sort((a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
+    const blob = sortedBlobs[0];
+
+    console.log(`Found ${blobs.length} availability blob(s), using most recent from:`, blob.uploadedAt);
     const response = await fetch(blob.url);
 
     // Check if response is ok and content-type is JSON
