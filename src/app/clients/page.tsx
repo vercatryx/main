@@ -13,10 +13,10 @@ export default async function ClientsPage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-black text-white">
+      <main className="min-h-screen bg-gray-950 text-white">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
               Please Sign In
             </h1>
             <p className="text-lg text-gray-400 mb-8">
@@ -26,11 +26,11 @@ export default async function ClientsPage() {
               path="/clients"
               appearance={{
                 variables: {
-                  colorPrimary: "#ef4444",
-                  colorBackground: "#000",
-                  colorText: "#fff",
-                  colorInputBackground: "#1f2937",
-                  colorInputText: "#fff",
+                  colorPrimary: "#b91c1c",
+                  colorBackground: "#0c0a09",
+                  colorText: "#f5f5f5",
+                  colorInputBackground: "#1c1917",
+                  colorInputText: "#e5e5e5",
                 },
               }}
             />

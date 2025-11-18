@@ -162,13 +162,13 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
       <h1 className="text-4xl font-bold mb-8">Admin Dashboard</h1>
 
       {/* Tabs */}
-      <div className="mb-8 flex gap-2 border-b border-gray-800">
+      <div className="mb-8 flex gap-2 border-b border-gray-800/50">
         <button
           onClick={() => setActiveTab('users')}
           className={`px-6 py-3 font-medium transition-colors flex items-center gap-2 ${
             activeTab === 'users'
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-gray-400 hover:text-white'
+              ? 'border-b-2 border-blue-600/80 text-gray-100'
+              : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           <Users className="w-5 h-5" />
@@ -178,8 +178,8 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
           onClick={() => setActiveTab('meetings')}
           className={`px-6 py-3 font-medium transition-colors flex items-center gap-2 ${
             activeTab === 'meetings'
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-gray-400 hover:text-white'
+              ? 'border-b-2 border-blue-600/80 text-gray-100'
+              : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           <Video className="w-5 h-5" />
@@ -192,42 +192,42 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
       ) : (
         <>
           {/* Create User Form */}
-          <div className="mb-12 bg-gray-900 rounded-lg p-6">
-        <h2 className="text-2xl font-semibold mb-4">Create New User</h2>
+          <div className="mb-12 bg-gray-900/80 rounded-lg p-6 border border-gray-800/50">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-100">Create New User</h2>
         <form action={createUser} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label htmlFor="email" className="block mb-1 font-medium">
+              <label htmlFor="email" className="block mb-1 font-medium text-gray-200">
                 Email
               </label>
               <input
                 type="email"
                 name="email"
                 required
-                className="w-full bg-gray-800 rounded-lg p-3 border border-gray-700 focus:border-blue-500 outline-none"
+                className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
                 placeholder="user@example.com"
               />
             </div>
             <div>
-              <label htmlFor="password" className="block mb-1 font-medium">
+              <label htmlFor="password" className="block mb-1 font-medium text-gray-200">
                 Password
               </label>
               <input
                 type="password"
                 name="password"
                 required
-                className="w-full bg-gray-800 rounded-lg p-3 border border-gray-700 focus:border-blue-500 outline-none"
+                className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
                 placeholder="••••••••"
               />
             </div>
             <div>
-              <label htmlFor="role" className="block mb-1 font-medium">
+              <label htmlFor="role" className="block mb-1 font-medium text-gray-200">
                 Role
               </label>
               <select
                 name="role"
                 defaultValue="user"
-                className="w-full bg-gray-800 rounded-lg p-3 border border-gray-700 focus:border-blue-500 outline-none"
+                className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 transition-colors"
               >
                 <option value="user">User</option>
                 <option value="superuser">Superuser</option>
@@ -236,7 +236,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
           </div>
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
+            className="px-6 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors font-medium"
           >
             Create User
           </button>
@@ -253,13 +253,13 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
             const metadata = user.publicMetadata as UserPublicMetadata;
 
             return (
-              <div key={user.id} className="bg-gray-900 rounded-lg overflow-hidden">
+              <div key={user.id} className="bg-gray-900/80 rounded-lg overflow-hidden border border-gray-800/50">
                 {/* User Header */}
                 <div className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <button
                       onClick={() => toggleUser(user.id)}
-                      className="p-1 hover:bg-gray-800 rounded transition-colors"
+                      className="p-1 hover:bg-gray-800/60 rounded transition-colors"
                     >
                       {isExpanded ? (
                         <ChevronUp className="w-5 h-5" />
@@ -279,8 +279,8 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                       <span
                         className={`px-3 py-1 rounded-full ${
                           metadata?.role === "superuser"
-                            ? "bg-purple-900 text-purple-200"
-                            : "bg-gray-800 text-gray-300"
+                            ? "bg-purple-900/60 text-purple-300"
+                            : "bg-gray-800/60 text-gray-300"
                         }`}
                       >
                         {metadata?.role || "user"}
@@ -293,7 +293,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                   <div className="flex gap-2">
                     <button
                       onClick={() => openAddProjectModal(user.id)}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-sm flex items-center gap-1"
+                      className="px-3 py-1 bg-blue-700/80 hover:bg-blue-600 rounded transition-colors text-sm flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add Project
@@ -308,7 +308,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                       <button
                         type="submit"
                         disabled={user.id === currentUserId}
-                        className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded transition-colors text-sm disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        className="px-3 py-1 bg-yellow-700/80 hover:bg-yellow-600 rounded transition-colors text-sm disabled:bg-gray-700/50 disabled:cursor-not-allowed disabled:text-gray-400"
                       >
                         {metadata?.role === "superuser" ? "Make User" : "Make Admin"}
                       </button>
@@ -318,7 +318,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                       <button
                         type="submit"
                         disabled={user.id === currentUserId}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded transition-colors text-sm disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        className="px-3 py-1 bg-red-700/80 hover:bg-red-600 rounded transition-colors text-sm disabled:bg-gray-700/50 disabled:cursor-not-allowed disabled:text-gray-400"
                       >
                         Delete
                       </button>
@@ -328,7 +328,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
 
                 {/* Projects Section */}
                 {isExpanded && (
-                  <div className="border-t border-gray-800 p-4 bg-gray-950">
+                  <div className="border-t border-gray-800/50 p-4 bg-gray-950/50">
                     {userProjects.length === 0 ? (
                       <p className="text-gray-400 text-center py-4">
                         No projects yet. Click "Add Project" to create one.
@@ -338,7 +338,7 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                         {userProjects.map((project) => (
                           <div
                             key={project.id}
-                            className="bg-gray-900 rounded-lg p-4 flex items-start justify-between"
+                            className="bg-gray-900/60 rounded-lg p-4 flex items-start justify-between border border-gray-800/50"
                           >
                             <div className="flex-1">
                               <h3 className="font-semibold text-lg">{project.title}</h3>
@@ -359,14 +359,14 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                             <div className="flex gap-2 ml-4">
                               <button
                                 onClick={() => openEditProjectModal(project)}
-                                className="p-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                                className="p-2 bg-blue-700/80 hover:bg-blue-600 rounded transition-colors"
                                 title="Edit project"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteProject(user.id, project.id)}
-                                className="p-2 bg-red-600 hover:bg-red-700 rounded transition-colors"
+                                className="p-2 bg-red-700/80 hover:bg-red-600 rounded transition-colors"
                                 title="Delete project"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -388,20 +388,20 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
 
       {/* Project Modal */}
       {showProjectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900/95 rounded-lg p-6 max-w-md w-full border border-gray-800/50">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">
+              <h2 className="text-2xl font-bold text-gray-100">
                 {editingProject ? "Edit Project" : "Add Project"}
               </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-white">
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-200 transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitProject} className="space-y-4">
               <div>
-                <label className="block mb-2 font-medium">Project Title</label>
+                <label className="block mb-2 font-medium text-gray-200">Project Title</label>
                 <input
                   type="text"
                   value={projectForm.title}
@@ -409,13 +409,13 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                     setProjectForm({ ...projectForm, title: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
+                  className="w-full px-4 py-2 bg-gray-800/80 rounded-lg border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
                   placeholder="My Awesome Project"
                 />
               </div>
 
               <div>
-                <label className="block mb-2 font-medium">Project URL</label>
+                <label className="block mb-2 font-medium text-gray-200">Project URL</label>
                 <input
                   type="url"
                   value={projectForm.url}
@@ -423,20 +423,20 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
                     setProjectForm({ ...projectForm, url: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
+                  className="w-full px-4 py-2 bg-gray-800/80 rounded-lg border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
                   placeholder="https://example.com"
                 />
               </div>
 
               <div>
-                <label className="block mb-2 font-medium">Description (Optional)</label>
+                <label className="block mb-2 font-medium text-gray-200">Description (Optional)</label>
                 <textarea
                   value={projectForm.description}
                   onChange={(e) =>
                     setProjectForm({ ...projectForm, description: e.target.value })
                   }
                   rows={3}
-                  className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-blue-500 outline-none resize-none"
+                  className="w-full px-4 py-2 bg-gray-800/80 rounded-lg border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 resize-none transition-colors"
                   placeholder="Brief description of the project"
                 />
               </div>
@@ -444,14 +444,14 @@ export default function AdminClient({ users, currentUserId, initialProjects }: A
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors"
                 >
                   {editingProject ? "Update Project" : "Add Project"}
                 </button>
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>

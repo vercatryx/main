@@ -6,6 +6,9 @@ import "@/styles/globals.css";
 export const metadata: Metadata = {
   title: "Vercatryx",
   description: "Your business solution platform",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

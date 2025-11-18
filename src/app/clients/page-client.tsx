@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
+import MeetingsModal from "@/components/client/meetings-modal";
 
 interface Project {
   id: string;
@@ -150,6 +151,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isProjectLoading, setIsProjectLoading] = useState(false);
+  const [showMeetingsModal, setShowMeetingsModal] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -329,6 +332,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   useEffect(() => {
     if (selectedProject && iframeRef.current) {
       console.log('Loading project:', selectedProject.title, selectedProject.id);
+      setIsProjectLoading(true);
 
       // For admin dashboard, load URL directly
       if (selectedProject.id === 'admin-dashboard') {
@@ -352,6 +356,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           })
           .catch((error) => {
             console.error('Error loading project:', error);
+            setIsProjectLoading(false);
           });
       }
     }
@@ -393,7 +398,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white">
         <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-4">No Projects Yet</h2>
+          <h2 className="text-2xl font-bold mb-4 text-gray-100">No Projects Yet</h2>
           <p className="text-gray-400">
             Your admin will add projects for you soon!
           </p>
@@ -735,26 +740,26 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   };
 
   return (
-    <div className="flex h-screen bg-black text-white overflow-hidden">
+    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
       {/* Sidebar - full width on mobile, toggleable on desktop */}
       <div
         className={`${
           isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
-        } bg-black border-r border-gray-800 transition-all duration-300 overflow-hidden flex flex-col`}
+        } bg-gray-950 border-r border-gray-800/50 transition-all duration-300 overflow-hidden flex flex-col`}
       >
         {chatState === 'sidebar' ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-800 bg-red-900/30">
+            <div className="p-4 border-b border-gray-800/50 bg-gray-900/60">
               <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-lg">
+                <h3 className="font-bold text-lg text-gray-100">
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
                   {isAdmin && (
                     <button
                       onClick={deleteEntireChat}
-                      className="p-2 hover:bg-red-700 rounded-lg text-red-200"
+                      className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
                       title="Delete entire chat"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -762,21 +767,21 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   )}
                   <button
                     onClick={() => setChatState('expanded')}
-                    className="p-2 hover:bg-red-700/30 rounded-lg"
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                     title="Expand chat"
                   >
                     <Maximize2 className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setChatState('closed')}
-                    className="p-2 hover:bg-red-700/30 rounded-lg"
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                     title="Close chat"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-              <p className="text-sm text-gray-200">
+              <p className="text-sm text-gray-400">
                 {getProjectForChat()?.description}
               </p>
             </div>
@@ -793,8 +798,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <div
                       className={`rounded-lg px-3 py-2 max-w-xs ${
                         msg.userId === user?.id
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-800/50 text-gray-300'
+                          ? 'bg-red-700/80 text-white'
+                          : 'bg-gray-800/60 text-gray-200'
                       }`}
                     >
                       {msg.message && msg.message.trim() && (
@@ -888,11 +893,11 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </div>
             </div>
             {/* Chat Input */}
-            <div className="p-4 border-t border-gray-800">
+            <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
               {selectedFiles.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                    <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
@@ -911,31 +916,31 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 </div>
               )}
               {audioBlob && (
-                <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-gray-800/70 rounded px-3 py-2 flex items-center gap-2">
                   <Mic className="w-4 h-4 text-blue-400" />
                   <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
                   <button
                     onClick={sendVoiceNote}
-                    className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                    className="bg-blue-700/80 hover:bg-blue-600 rounded px-3 py-1 text-xs transition-colors"
                     disabled={uploadingFiles}
                   >
                     Send
                   </button>
                   <button
                     onClick={cancelRecording}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-red-400 hover:text-red-300 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
               {isRecording && (
-                <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                <div className="mb-2 bg-red-950/40 border border-red-700/50 rounded px-3 py-2 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                   <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
                   <button
                     onClick={stopRecording}
-                    className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                    className="bg-red-700/80 hover:bg-red-600 rounded-lg p-2 transition-colors"
                   >
                     <Square className="w-4 h-4" />
                   </button>
@@ -953,7 +958,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                  className="bg-gray-800/80 hover:bg-gray-700 rounded-lg p-2 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
@@ -962,8 +967,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   className={`${
-                    isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
-                  } rounded-lg p-2`}
+                    isRecording ? 'bg-red-700/80 hover:bg-red-600' : 'bg-gray-800/80 hover:bg-gray-700'
+                  } rounded-lg p-2 transition-colors`}
                   disabled={uploadingFiles || audioBlob !== null}
                 >
                   <Mic className="w-5 h-5" />
@@ -971,7 +976,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <input
                   ref={messageInputRef}
                   name="message"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                  className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 placeholder-gray-500 focus:border-blue-600/50 focus:bg-gray-800 outline-none transition-colors"
                   placeholder="Type a message..."
                   disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
@@ -983,7 +988,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                  className="bg-blue-700/80 hover:bg-blue-600 rounded-lg p-2 disabled:opacity-50 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
@@ -998,8 +1003,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           </>
         ) : chatState === 'expanded' && isMobile ? (
           /* Mobile Expanded Chat - takes over entire screen */
-          <div className="w-full h-full bg-gray-800 flex flex-col">
-            <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+          <div className="w-full h-full bg-gray-900 flex flex-col">
+            <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/60">
               <h3 className="font-bold">
                 {getProjectForChat()?.title}
               </h3>
@@ -1007,7 +1012,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 {isAdmin && (
                   <button
                     onClick={deleteEntireChat}
-                    className="p-2 hover:bg-red-700 rounded-lg text-red-400"
+                    className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
                     title="Delete entire chat"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1015,19 +1020,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 )}
                 <button
                   onClick={() => setChatState('sidebar')}
-                  className="p-2 hover:bg-gray-700 rounded-lg"
+                  className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                 >
                   <Minimize2 className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setChatState('closed')}
-                  className="p-2 hover:bg-gray-700 rounded-lg"
+                  className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
-            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-gray-950/50">
               <div className="space-y-4">
                 {messages.map((msg) => (
                   <div
@@ -1039,8 +1044,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <div
                       className={`rounded-lg px-3 py-2 max-w-md ${
                         msg.userId === user?.id
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-800/50 text-gray-300'
+                          ? 'bg-red-700/80 text-white'
+                          : 'bg-gray-800/70 text-gray-200'
                       }`}
                     >
                       {msg.message && msg.message.trim() && (
@@ -1133,11 +1138,11 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 ))}
               </div>
             </div>
-            <div className="p-4 border-t border-gray-700">
+            <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
               {selectedFiles.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                    <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
@@ -1156,31 +1161,31 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 </div>
               )}
               {audioBlob && (
-                <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-gray-800/70 rounded px-3 py-2 flex items-center gap-2">
                   <Mic className="w-4 h-4 text-blue-400" />
                   <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
                   <button
                     onClick={sendVoiceNote}
-                    className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                    className="bg-blue-700/80 hover:bg-blue-600 rounded px-3 py-1 text-xs transition-colors"
                     disabled={uploadingFiles}
                   >
                     Send
                   </button>
                   <button
                     onClick={cancelRecording}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-red-400 hover:text-red-300 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
               {isRecording && (
-                <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                <div className="mb-2 bg-red-950/40 border border-red-700/50 rounded px-3 py-2 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                   <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
                   <button
                     onClick={stopRecording}
-                    className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                    className="bg-red-700/80 hover:bg-red-600 rounded-lg p-2 transition-colors"
                   >
                     <Square className="w-4 h-4" />
                   </button>
@@ -1198,7 +1203,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                  className="bg-gray-800/80 hover:bg-gray-700 rounded-lg p-2 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
@@ -1207,8 +1212,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   className={`${
-                    isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
-                  } rounded-lg p-2`}
+                    isRecording ? 'bg-red-700/80 hover:bg-red-600' : 'bg-gray-800/80 hover:bg-gray-700'
+                  } rounded-lg p-2 transition-colors`}
                   disabled={uploadingFiles || audioBlob !== null}
                 >
                   <Mic className="w-5 h-5" />
@@ -1216,7 +1221,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 <input
                   ref={messageInputRef}
                   name="message"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                  className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 placeholder-gray-500 focus:border-blue-600/50 focus:bg-gray-800 outline-none transition-colors"
                   placeholder="Type a message..."
                   disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
@@ -1228,7 +1233,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                  className="bg-blue-700/80 hover:bg-blue-600 rounded-lg p-2 disabled:opacity-50 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
@@ -1243,22 +1248,22 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         ) : (
           <>
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+            <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/40">
               <div>
-                <h2 className="text-xl font-bold mb-1">Welcome, {userName}!</h2>
+                <h2 className="text-xl font-bold mb-1 text-gray-100">Welcome, {userName}!</h2>
                 <p className="text-sm text-gray-400">
                   {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
                 </p>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="p-2 hover:bg-gray-800 rounded-full">
+                  <button className="p-2 hover:bg-gray-800/60 rounded-full transition-colors">
                     <UserCircle className="w-6 h-6" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <SignOutButton>
-                    <DropdownMenuItem className="text-red-500 hover:!text-red-500 hover:!bg-red-500/10 cursor-pointer">
+                    <DropdownMenuItem className="text-red-400 hover:!text-red-400 hover:!bg-red-900/20 cursor-pointer">
                       <LogOut className="w-4 h-4 mr-2" />
                       Log Out
                     </DropdownMenuItem>
@@ -1269,8 +1274,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
             {/* Upcoming Meeting for Users */}
             {!isAdmin && upcomingMeeting && (
-              <div className="p-4 border-b border-gray-800">
-                <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
+              <div className="p-4 border-b border-gray-800/50">
+                <div className="bg-red-950/30 border border-red-800/50 rounded-lg p-3">
                   <div className="flex items-start gap-2">
                     <Video className="w-5 h-5 text-red-400 mt-0.5" />
                     <div className="flex-1 min-w-0">
@@ -1290,7 +1295,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                         href={`/meetings/${upcomingMeeting.id}/join`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded transition-colors"
+                        className="inline-flex items-center gap-1 bg-red-700/80 hover:bg-red-600 text-white text-sm px-3 py-1.5 rounded transition-colors"
                       >
                         <Video className="w-3 h-3" />
                         Join Meeting
@@ -1302,22 +1307,20 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </div>
             )}
 
-            {/* Meetings Button for Admin */}
-            {isAdmin && (
-              <div className="p-4 border-b border-gray-800">
-                <a
-                  href="/meetings"
-                  className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <Video className="w-4 h-4" />
-                  Manage Meetings
-                </a>
-              </div>
-            )}
+            {/* Meetings Button */}
+            <div className="p-4 border-b border-gray-800/50">
+              <button
+                onClick={() => setShowMeetingsModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-red-700/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Video className="w-4 h-4" />
+                {isAdmin ? 'Manage Meetings' : 'My Meetings'}
+              </button>
+            </div>
 
             {/* Admin User Selector */}
             {isAdmin && (
-              <div className="p-4 border-b border-gray-800">
+              <div className="p-4 border-b border-gray-800/50">
                 <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
                   <UserCircle className="w-4 h-4" />
                   View Client Projects
@@ -1327,7 +1330,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <select
                       value={selectedUserId || ''}
                       onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-red-500 outline-none"
+                      className="w-full bg-gray-900 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 focus:border-red-600/50 outline-none transition-colors"
                     >
                       {usersWithProjects.map((user) => (
                         <option key={user.id} value={user.id}>
@@ -1360,8 +1363,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     }}
                     className={`w-full text-left p-4 rounded-lg transition-colors ${
                       selectedProject?.id === project.id
-                        ? 'bg-red-600 text-white'
-                        : 'bg-gray-900 hover:bg-gray-800 text-gray-300'
+                        ? 'bg-red-700/80 text-white'
+                        : 'bg-gray-900/80 hover:bg-gray-800/80 text-gray-200'
                     }`}
                   >
                     <h3 className="font-semibold mb-1">{project.title}</h3>
@@ -1382,7 +1385,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                           setChatProjectId(null);
                         }
                       }}
-                      className="absolute top-2 right-2 p-2 bg-gray-700 rounded-full hover:bg-gray-600"
+                      className="absolute top-2 right-2 p-2 bg-gray-800/80 rounded-full hover:bg-gray-700 transition-colors"
                     >
                       {chatState === 'closed' ? (
                         <MessageCircle className="w-4 h-4" />
@@ -1404,12 +1407,12 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       {/* Main Content Area - hidden on mobile */}
       <div className="hidden md:flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
-        <div className="bg-gray-900 border-b border-gray-800 p-3 flex items-center justify-between">
+        <div className="bg-gray-900/80 border-b border-gray-800/50 p-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Toggle Sidebar Button */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-800/60 rounded-lg transition-colors"
               title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             >
               {isSidebarOpen ? (
@@ -1432,7 +1435,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? (
@@ -1452,8 +1455,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         {/* Iframe Container */}
         <div className="flex-1 bg-white relative">
           {chatState === 'expanded' ? (
-            <div className="w-full h-full bg-gray-800 flex flex-col">
-              <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+            <div className="w-full h-full bg-gray-900 flex flex-col">
+              <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/60">
                 <h3 className="font-bold">
                   {getProjectForChat()?.title}
                 </h3>
@@ -1461,7 +1464,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   {isAdmin && (
                     <button
                       onClick={deleteEntireChat}
-                      className="p-2 hover:bg-red-700 rounded-lg text-red-400"
+                      className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
                       title="Delete entire chat"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1469,19 +1472,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   )}
                   <button
                     onClick={() => setChatState('sidebar')}
-                    className="p-2 hover:bg-gray-700 rounded-lg"
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                   >
                     <Minimize2 className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setChatState('closed')}
-                    className="p-2 hover:bg-gray-700 rounded-lg"
+                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-              <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
+              <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-gray-950/50">
                 <div className="space-y-4">
                   {messages.map((msg) => (
                     <div
@@ -1493,8 +1496,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       <div
                         className={`rounded-lg px-3 py-2 max-w-md ${
                           msg.userId === user?.id
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-700 text-gray-200'
+                            ? 'bg-blue-700/80 text-white'
+                            : 'bg-gray-800/70 text-gray-200'
                         }`}
                       >
                         {msg.message && msg.message.trim() && (
@@ -1587,11 +1590,11 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   ))}
                 </div>
               </div>
-              <div className="p-4 border-t border-gray-700">
+              <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
                 {selectedFiles.length > 0 && (
                   <div className="mb-2 space-y-1">
                     {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center gap-2 bg-gray-700 rounded px-2 py-1 text-xs">
+                      <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
                         {file.type.startsWith('image/') ? (
                           <ImageIcon className="w-3 h-3" />
                         ) : (
@@ -1694,15 +1697,31 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </div>
             </div>
           ) : selectedProject ? (
-            <iframe
-              ref={iframeRef}
-              className="w-full h-full border-0"
-              title={selectedProject.title}
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-downloads allow-modals allow-pointer-lock allow-presentation"
-              allow="accelerometer; autoplay; clipboard-write; clipboard-read; encrypted-media; gyroscope; picture-in-picture; fullscreen; microphone; camera; geolocation; payment; storage-access-by-user-activation"
-              onLoad={() => console.log('✅ Iframe loaded successfully')}
-              onError={(e) => console.error('❌ Iframe error:', e)}
-            />
+            <div className="relative w-full h-full">
+              {isProjectLoading && (
+                <div className="absolute inset-0 bg-gray-950 flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 border-4 border-blue-700/30 border-t-blue-600 rounded-full animate-spin" />
+                    <p className="text-gray-400 text-sm">Loading {selectedProject.title}...</p>
+                  </div>
+                </div>
+              )}
+              <iframe
+                ref={iframeRef}
+                className="w-full h-full border-0"
+                title={selectedProject.title}
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-downloads allow-modals allow-pointer-lock allow-presentation"
+                allow="accelerometer; autoplay; clipboard-write; clipboard-read; encrypted-media; gyroscope; picture-in-picture; fullscreen; microphone; camera; geolocation; payment; storage-access-by-user-activation"
+                onLoad={() => {
+                  console.log('✅ Iframe loaded successfully');
+                  setIsProjectLoading(false);
+                }}
+                onError={(e) => {
+                  console.error('❌ Iframe error:', e);
+                  setIsProjectLoading(false);
+                }}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full bg-gray-950 text-white">
               <p className="text-gray-400">Select a project from the sidebar</p>
@@ -1710,6 +1729,22 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           )}
         </div>
       </div>
+
+      {/* Meetings Modal */}
+      <MeetingsModal
+        isOpen={showMeetingsModal}
+        onClose={() => setShowMeetingsModal(false)}
+        isAdmin={isAdmin}
+        userName={userName}
+        userId={user?.id || ''}
+        users={usersWithProjects?.map(u => ({
+          id: u.id,
+          firstName: u.name.split(' ')[0] || null,
+          lastName: u.name.split(' ').slice(1).join(' ') || null,
+          emailAddresses: [{ emailAddress: u.email }],
+          publicMetadata: { role: 'user' }
+        }))}
+      />
     </div>
   );
 }

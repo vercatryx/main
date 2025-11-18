@@ -189,7 +189,7 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
 
   if (loading) {
     return (
-      <Card className="bg-gray-900 border-gray-800">
+      <Card className="bg-gray-900/80 border-gray-800/50">
         <CardContent className="pt-6">
           <div className="text-center py-12">
             <p className="text-gray-400">Loading meetings...</p>
@@ -203,7 +203,7 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Meetings Management</h2>
+          <h2 className="text-2xl font-semibold text-gray-100">Meetings Management</h2>
           <p className="text-gray-400 text-sm mt-1">Create and manage meetings with users</p>
         </div>
         <Button onClick={openCreateModal}>
@@ -213,7 +213,7 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
       </div>
 
       {meetings.length === 0 ? (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-gray-900/80 border-gray-800/50">
           <CardContent className="pt-6">
             <div className="text-center py-12">
               <Video className="mx-auto h-12 w-12 text-gray-400" />
@@ -227,7 +227,7 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {meetings.map((meeting) => (
-            <Card key={meeting.id} className="bg-gray-900 border-gray-800">
+            <Card key={meeting.id} className="bg-gray-900/80 border-gray-800/50">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-lg">{meeting.title}</CardTitle>
@@ -276,9 +276,9 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
 
       {/* Create Meeting Dialog */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-gray-900/95 border-gray-800/50 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Meeting</DialogTitle>
+            <DialogTitle className="text-gray-100">Create New Meeting</DialogTitle>
             <DialogDescription className="text-gray-400">
               Schedule a meeting with one or more users
             </DialogDescription>
@@ -286,52 +286,52 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
 
           <form onSubmit={handleCreateMeeting} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Meeting Title</Label>
+              <Label htmlFor="title" className="text-gray-200">Meeting Title</Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="Team Sync"
                 required
-                className="bg-gray-800 border-gray-700"
+                className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100 placeholder-gray-500"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
+              <Label htmlFor="description" className="text-gray-200">Description (Optional)</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Discuss project progress and next steps"
                 rows={3}
-                className="bg-gray-800 border-gray-700"
+                className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100 placeholder-gray-500"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="scheduledAt">Date & Time</Label>
+                <Label htmlFor="scheduledAt" className="text-gray-200">Date & Time</Label>
                 <Input
                   id="scheduledAt"
                   type="datetime-local"
                   value={formData.scheduledAt}
                   onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
                   required
-                  className="bg-gray-800 border-gray-700"
+                  className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Label htmlFor="duration" className="text-gray-200">Duration (minutes)</Label>
                 <Select
                   value={formData.duration}
                   onValueChange={(value) => setFormData({ ...formData, duration: value })}
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700">
+                  <SelectTrigger className="bg-gray-800/80 border-gray-700/50 text-gray-100">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                  <SelectContent className="bg-gray-800/90 border-gray-700/50 text-white">
                     <SelectItem value="15">15 minutes</SelectItem>
                     <SelectItem value="30">30 minutes</SelectItem>
                     <SelectItem value="45">45 minutes</SelectItem>
@@ -344,8 +344,8 @@ export default function MeetingsManagement({ users }: MeetingsManagementProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Participants ({formData.participantUserIds.length} selected)</Label>
-              <div className="border border-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800">
+              <Label className="text-gray-200">Participants ({formData.participantUserIds.length} selected)</Label>
+              <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
                 {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
                   <div key={user.id} className="flex items-center space-x-2">
                     <Checkbox
