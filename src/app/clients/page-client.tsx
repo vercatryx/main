@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square } from "lucide-react";
 import {
@@ -94,7 +94,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     : userProjects;
 
   // Helper function to update URL
-  const updateURL = (params: { projectId?: string; chat?: string; chatState?: string; userId?: string }) => {
+  const updateURL = useCallback((params: { projectId?: string; chat?: string; chatState?: string; userId?: string }) => {
     const newParams = new URLSearchParams(searchParams.toString());
 
     if (params.projectId) {
@@ -119,7 +119,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     }
 
     router.replace(`/clients?${newParams.toString()}`, { scroll: false });
-  };
+  }, [router, searchParams]);
 
   // Initialize state from URL params or defaults
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -149,10 +149,12 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const audioChunksRef = useRef<Blob[]>([]);
   const { user } = useUser();
   const { getToken } = useAuth();
+  const hasInitialized = useRef(false);
 
-  // Initialize selected project from URL or default
+  // Initialize selected project from URL or default (only once)
   useEffect(() => {
-    if (currentProjects.length > 0 && !selectedProject) {
+    if (currentProjects.length > 0 && !hasInitialized.current) {
+      hasInitialized.current = true;
       const projectIdFromUrl = searchParams.get('project');
       if (projectIdFromUrl) {
         const project = currentProjects.find(p => p.id === projectIdFromUrl);
@@ -161,7 +163,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
         setSelectedProject(currentProjects[0]);
       }
     }
-  }, [currentProjects.length, selectedProject]);
+  }, [currentProjects, searchParams]);
 
   // Detect mobile on mount
   useEffect(() => {
@@ -177,25 +179,27 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
   // Sync selected project to URL
   useEffect(() => {
-    if (selectedProject) {
+    if (selectedProject && hasInitialized.current) {
       updateURL({ projectId: selectedProject.id });
     }
-  }, [selectedProject?.id]);
+  }, [selectedProject?.id, updateURL]);
 
   // Sync chat state to URL
   useEffect(() => {
-    updateURL({
-      chat: chatProjectId || undefined,
-      chatState: chatState
-    });
-  }, [chatProjectId, chatState]);
+    if (hasInitialized.current) {
+      updateURL({
+        chat: chatProjectId || undefined,
+        chatState: chatState
+      });
+    }
+  }, [chatProjectId, chatState, updateURL]);
 
   // Sync selected user (admin only) to URL
   useEffect(() => {
-    if (isAdmin && selectedUserId) {
+    if (isAdmin && selectedUserId && hasInitialized.current) {
       updateURL({ userId: selectedUserId });
     }
-  }, [selectedUserId, isAdmin]);
+  }, [selectedUserId, isAdmin, updateURL]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
