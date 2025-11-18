@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut } from "lucide-react";
+import { SignOutButton } from "@clerk/nextjs";
 
 interface Project {
   id: string;
@@ -78,18 +79,30 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   }, [selectedProject]);
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
+    if (!isFullscreen) {
+      // Enter fullscreen and hide sidebar
       document.documentElement.requestFullscreen();
       setIsFullscreen(true);
+      setIsSidebarOpen(false);
     } else {
+      // Exit fullscreen and show sidebar
       document.exitFullscreen();
       setIsFullscreen(false);
+      setIsSidebarOpen(true);
     }
   };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isNowFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isNowFullscreen);
+
+      // Hide sidebar when entering fullscreen, show when exiting
+      if (isNowFullscreen) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -186,8 +199,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           ))}
         </div>
 
-        {/* Chat Button */}
-        <div className="p-4 border-t border-gray-800">
+        {/* Chat Button & Logout */}
+        <div className="p-4 border-t border-gray-800 space-y-2">
           <button
             onClick={() => setShowChat(!showChat)}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg transition-colors font-medium"
@@ -200,6 +213,14 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               Chat feature coming soon!
             </div>
           )}
+
+          {/* Logout Button */}
+          <SignOutButton>
+            <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
+              <LogOut className="w-5 h-5" />
+              <span>Log Out</span>
+            </button>
+          </SignOutButton>
         </div>
       </div>
 
