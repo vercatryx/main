@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 
@@ -36,16 +36,19 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       : null
   );
 
-  // Create admin project for admins
-  const adminProject: Project | null = isAdmin ? {
-    id: 'admin-dashboard',
-    userId: 'admin',
-    title: 'Admin',
-    url: '/admin',
-    description: 'User Management Dashboard',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  } : null;
+  // Create admin project for admins (useMemo to prevent infinite loop)
+  const adminProject: Project | null = useMemo(() =>
+    isAdmin ? {
+      id: 'admin-dashboard',
+      userId: 'admin',
+      title: 'Admin',
+      url: '/admin',
+      description: 'User Management Dashboard',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } : null,
+    [isAdmin]
+  );
 
   // Get current projects based on admin or regular user
   const userProjects = isAdmin && usersWithProjects && selectedUserId
