@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut } from "lucide-react";
-import { SignOutButton } from "@clerk/nextjs";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send } from "lucide-react";
+import { SignOutButton, useUser } from "@clerk/nextjs";
 
 interface Project {
   id: string;
@@ -26,6 +26,14 @@ interface ClientPortalProps {
   isAdmin: boolean;
   projects?: Project[];
   usersWithProjects?: UserWithProjects[];
+}
+
+interface ChatMessage {
+  id: string;
+  userId: string;
+  userName: string;
+  message: string;
+  timestamp: number;
 }
 
 export default function ClientPortal({ projects, userName, isAdmin, usersWithProjects }: ClientPortalProps) {
@@ -65,9 +73,20 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [showChat, setShowChat] = useState(false);
+  const [chatState, setChatState] = useState<'closed' | 'sidebar' | 'expanded'>('closed');
+  const [chatProjectId, setChatProjectId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { user } = useUser();
 
+  useEffect(() => {
+    if (chatProjectId) {
+      fetch(`/api/chat/${chatProjectId}`)
+        .then((res) => res.json())
+        .then((data) => setMessages(data.reverse()));
+    }
+  }, [chatProjectId]);
+  
   // Update selected project when user changes (admin only)
   useEffect(() => {
     if (isAdmin && selectedUserId && usersWithProjects && adminProject) {
@@ -158,6 +177,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
     );
   }
 
+  const getProjectForChat = () => currentProjects.find(p => p.id === chatProjectId);
+
   return (
     <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
       {/* Sidebar */}
@@ -166,96 +187,214 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
           isSidebarOpen ? 'w-80' : 'w-0'
         } bg-gray-900 border-r border-gray-800 transition-all duration-300 overflow-hidden flex flex-col`}
       >
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-800">
-          <h2 className="text-xl font-bold mb-1">Welcome, {userName}!</h2>
-          <p className="text-sm text-gray-400">
-            {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
-          </p>
-        </div>
-
-        {/* Admin User Selector */}
-        {isAdmin && (
-          <div className="p-4 border-b border-gray-800">
-            <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
-              <UserCircle className="w-4 h-4" />
-              View Client Projects
-            </label>
-            {usersWithProjects && usersWithProjects.length > 0 ? (
-              <>
-                <select
-                  value={selectedUserId || ''}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+        {chatState === 'sidebar' ? (
+          <>
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-800 bg-blue-800">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-lg">
+                  {getProjectForChat()?.title}
+                </h3>
+                <div>
+                  <button
+                    onClick={() => setChatState('expanded')}
+                    className="p-2 hover:bg-blue-700 rounded-lg"
+                    title="Expand chat"
+                  >
+                    <Maximize2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setChatState('closed')}
+                    className="p-2 hover:bg-blue-700 rounded-lg"
+                    title="Close chat"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-200">
+                {getProjectForChat()?.description}
+              </p>
+            </div>
+            {/* Chat Content */}
+            <div className="flex-1 p-4 overflow-y-auto flex flex-col-reverse">
+              <div className="space-y-4">
+                {messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${
+                      msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <div
+                      className={`rounded-lg px-3 py-2 max-w-xs ${
+                        msg.userId === user?.id
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-700 text-gray-200'
+                      }`}
+                    >
+                      <p className="font-bold text-sm">{msg.userName}</p>
+                      <p>{msg.message}</p>
+                      <p className="text-xs opacity-70 text-right">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Chat Input */}
+            <div className="p-4 border-t border-gray-800">
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const input = form.elements.namedItem('message') as HTMLInputElement;
+                  const message = input.value;
+                  if (message.trim() && chatProjectId) {
+                    const res = await fetch(`/api/chat/${chatProjectId}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        message,
+                        userId: user?.id,
+                        userName: user?.fullName,
+                      }),
+                    });
+                    if (res.ok) {
+                      const newMessage = await res.json();
+                      setMessages((prev) => [newMessage, ...prev]);
+                      input.value = '';
+                    }
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  name="message"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                  placeholder="Type a message..."
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2"
                 >
-                  {usersWithProjects.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} ({user.projects.length} project{user.projects.length !== 1 ? 's' : ''})
-                    </option>
-                  ))}
-                </select>
-                {selectedUserId && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {usersWithProjects.find(u => u.id === selectedUserId)?.email}
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+            <div className="p-4 border-t border-gray-800 space-y-2">
+              {/* Logout Button */}
+              <SignOutButton>
+                <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
+                  <LogOut className="w-5 h-5" />
+                  <span>Log Out</span>
+                </button>
+              </SignOutButton>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Sidebar Header */}
+            <div className="p-4 border-b border-gray-800">
+              <h2 className="text-xl font-bold mb-1">Welcome, {userName}!</h2>
+              <p className="text-sm text-gray-400">
+                {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
+              </p>
+            </div>
+
+            {/* Admin User Selector */}
+            {isAdmin && (
+              <div className="p-4 border-b border-gray-800">
+                <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
+                  <UserCircle className="w-4 h-4" />
+                  View Client Projects
+                </label>
+                {usersWithProjects && usersWithProjects.length > 0 ? (
+                  <>
+                    <select
+                      value={selectedUserId || ''}
+                      onChange={(e) => setSelectedUserId(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                    >
+                      {usersWithProjects.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} ({user.projects.length} project{user.projects.length !== 1 ? 's' : ''})
+                        </option>
+                      ))}
+                    </select>
+                    {selectedUserId && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {usersWithProjects.find(u => u.id === selectedUserId)?.email}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    No clients have projects yet. Use the Admin dashboard to add projects.
                   </p>
                 )}
-              </>
-            ) : (
-              <p className="text-sm text-gray-500 italic">
-                No clients have projects yet. Use the Admin dashboard to add projects.
-              </p>
+              </div>
             )}
-          </div>
-        )}
 
-        {/* Projects List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {currentProjects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => {
-                console.log('🖱️ Project clicked:', project.title, project.id);
-                setSelectedProject(project);
-              }}
-              className={`w-full text-left p-4 rounded-lg transition-colors ${
-                selectedProject?.id === project.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-              }`}
-            >
-              <h3 className="font-semibold mb-1">{project.title}</h3>
-              {project.description && (
-                <p className="text-sm opacity-80 line-clamp-2">
-                  {project.description}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Chat Button & Logout */}
-        <div className="p-4 border-t border-gray-800 space-y-2">
-          <button
-            onClick={() => setShowChat(!showChat)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg transition-colors font-medium"
-          >
-            <MessageCircle className="w-5 h-5" />
-            <span>Chat with Support</span>
-          </button>
-          {showChat && (
-            <div className="mt-2 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg text-sm text-yellow-200">
-              Chat feature coming soon!
+            {/* Projects List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {currentProjects.map((project) => (
+                <div key={project.id} className="relative">
+                  <button
+                    onClick={() => {
+                      console.log('🖱️ Project clicked:', project.title, project.id);
+                      setSelectedProject(project);
+                    }}
+                    className={`w-full text-left p-4 rounded-lg transition-colors ${
+                      selectedProject?.id === project.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    <h3 className="font-semibold mb-1">{project.title}</h3>
+                    {project.description && (
+                      <p className="text-sm opacity-80 line-clamp-2">
+                        {project.description}
+                      </p>
+                    )}
+                  </button>
+                  {selectedProject?.id === project.id && project.id !== 'admin-dashboard' && (
+                    <button
+                      onClick={() => {
+                        if (chatState === 'closed') {
+                          setChatState('sidebar');
+                          setChatProjectId(project.id);
+                        } else {
+                          setChatState('closed');
+                          setChatProjectId(null);
+                        }
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-gray-700 rounded-full hover:bg-gray-600"
+                    >
+                      {chatState === 'closed' ? (
+                        <MessageCircle className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
 
-          {/* Logout Button */}
-          <SignOutButton>
-            <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
-              <LogOut className="w-5 h-5" />
-              <span>Log Out</span>
-            </button>
-          </SignOutButton>
-        </div>
+            {/* Chat Button & Logout */}
+            <div className="p-4 border-t border-gray-800 space-y-2">
+              {/* Logout Button */}
+              <SignOutButton>
+                <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
+                  <LogOut className="w-5 h-5" />
+                  <span>Log Out</span>
+                </button>
+              </SignOutButton>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -308,7 +447,97 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
 
         {/* Iframe Container */}
         <div className="flex-1 bg-white relative">
-          {selectedProject ? (
+          {chatState === 'expanded' ? (
+            <div className="w-full h-full bg-gray-800 flex flex-col">
+              <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 className="font-bold">
+                  {getProjectForChat()?.title}
+                </h3>
+                <div>
+                  <button
+                    onClick={() => setChatState('sidebar')}
+                    className="p-2 hover:bg-gray-700 rounded-lg"
+                  >
+                    <Minimize2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setChatState('closed')}
+                    className="p-2 hover:bg-gray-700 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 p-4 overflow-y-auto flex flex-col-reverse">
+                <div className="space-y-4">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${
+                        msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`rounded-lg px-3 py-2 max-w-xs ${
+                          msg.userId === user?.id
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-700 text-gray-200'
+                        }`}
+                      >
+                        <p className="font-bold text-sm">{msg.userName}</p>
+                        <p>{msg.message}</p>
+                        <p className="text-xs opacity-70 text-right">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="p-4 border-t border-gray-700">
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    console.log('Form submitted');
+                    const form = e.currentTarget;
+                    const input = form.elements.namedItem('message') as HTMLInputElement;
+                    const message = input.value;
+                    console.log('Message:', message);
+                    console.log('chatProjectId:', chatProjectId);
+                    if (message.trim() && chatProjectId) {
+                      const res = await fetch(`/api/chat/${chatProjectId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                        message,
+                        userId: user?.id,
+                        userName: user?.fullName,
+                      }),
+                      });
+                      if (res.ok) {
+                        const newMessage = await res.json();
+                        setMessages((prev) => [newMessage, ...prev]);
+                        input.value = '';
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    name="message"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                    placeholder="Type a message..."
+                  />
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : selectedProject ? (
             <iframe
               ref={iframeRef}
               className="w-full h-full border-0"
