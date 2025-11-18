@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 
 interface Project {
@@ -77,15 +83,22 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const { user } = useUser();
   const { getToken } = useAuth();
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (chatProjectId) {
       const fetchMessages = async () => {
         const res = await fetch(`/api/chat/${chatProjectId}`);
         const data = await res.json();
-        setMessages(data.reverse());
+        setMessages(data);
       };
       fetchMessages();
     }
@@ -221,7 +234,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               </p>
             </div>
             {/* Chat Content */}
-            <div className="flex-1 p-4 overflow-y-auto flex flex-col-reverse">
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
               <div className="space-y-4">
                 {messages.map((msg) => (
                   <div
@@ -233,7 +246,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     <div
                       className={`rounded-lg px-3 py-2 max-w-xs ${
                         msg.userId === user?.id
-                          ? 'bg-green-600 text-white'
+                          ? 'bg-blue-600 text-white'
                           : 'bg-gray-700 text-gray-200'
                       }`}
                     >
@@ -269,7 +282,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                     });
                     if (res.ok) {
                       const newMessage = await res.json();
-                      setMessages((prev) => [newMessage, ...prev]);
+                      setMessages((prev) => [...prev, newMessage]);
                       input.value = '';
                     }
                   }
@@ -289,24 +302,33 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 </button>
               </form>
             </div>
-            <div className="p-4 border-t border-gray-800 space-y-2">
-              {/* Logout Button */}
-              <SignOutButton>
-                <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
-                  <LogOut className="w-5 h-5" />
-                  <span>Log Out</span>
-                </button>
-              </SignOutButton>
-            </div>
+
           </>
         ) : (
           <>
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-800">
-              <h2 className="text-xl font-bold mb-1">Welcome, {userName}!</h2>
-              <p className="text-sm text-gray-400">
-                {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
-              </p>
+            <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold mb-1">Welcome, {userName}!</h2>
+                <p className="text-sm text-gray-400">
+                  {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-2 hover:bg-gray-800 rounded-full">
+                    <UserCircle className="w-6 h-6" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <SignOutButton>
+                    <DropdownMenuItem className="text-red-500 hover:!text-red-500 hover:!bg-red-500/10 cursor-pointer">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Log Out
+                    </DropdownMenuItem>
+                  </SignOutButton>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Admin User Selector */}
@@ -390,15 +412,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
             </div>
 
             {/* Chat Button & Logout */}
-            <div className="p-4 border-t border-gray-800 space-y-2">
-              {/* Logout Button */}
-              <SignOutButton>
-                <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium">
-                  <LogOut className="w-5 h-5" />
-                  <span>Log Out</span>
-                </button>
-              </SignOutButton>
-            </div>
+
           </>
         )}
       </div>
@@ -474,7 +488,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-4 overflow-y-auto flex flex-col-reverse">
+              <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
                 <div className="space-y-4">
                   {messages.map((msg) => (
                     <div
@@ -486,7 +500,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                       <div
                         className={`rounded-lg px-3 py-2 max-w-xs ${
                           msg.userId === user?.id
-                            ? 'bg-green-600 text-white'
+                            ? 'bg-blue-600 text-white'
                             : 'bg-gray-700 text-gray-200'
                         }`}
                       >
@@ -520,7 +534,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                                               }),
                                                             });                                        if (res.ok) {
                                           const newMessage = await res.json();
-                                          setMessages((prev) => [newMessage, ...prev]);
+                                          setMessages((prev) => [...prev, newMessage]);
                                           input.value = '';
                                         }
                                       }
@@ -545,8 +559,8 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
               ref={iframeRef}
               className="w-full h-full border-0"
               title={selectedProject.title}
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-downloads allow-modals allow-pointer-lock allow-presentation"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; microphone; camera; geolocation; payment"
               onLoad={() => console.log('✅ Iframe loaded successfully')}
               onError={(e) => console.error('❌ Iframe error:', e)}
             />
