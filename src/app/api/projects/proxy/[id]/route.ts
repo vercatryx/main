@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { getUserProjects, getAllUserProjects } from '@/lib/projects';
+import { getCompanyProjects, getProjectById } from '@/lib/projects';
+import { getUserByClerkId } from '@/lib/users';
 
 interface UserPublicMetadata {
   role?: 'superuser' | 'user';
@@ -22,28 +23,29 @@ export async function GET(
 
     const { id: projectId } = await context.params;
 
-    // Check if user is an admin
-    const user = await currentUser();
-    const publicMetadata = user?.publicMetadata as UserPublicMetadata;
-    const isAdmin = publicMetadata?.role === 'superuser';
+    // Check if user is a superuser
+    const clerkUser = await currentUser();
+    const publicMetadata = clerkUser?.publicMetadata as UserPublicMetadata;
+    const isSuperuser = publicMetadata?.role === 'superuser';
 
     let project;
 
-    if (isAdmin) {
-      // Admins can access any project
-      const allProjects = await getAllUserProjects();
-      // Search through all users' projects
-      for (const userProjects of Object.values(allProjects)) {
-        const found = userProjects.find((p) => p.id === projectId);
-        if (found) {
-          project = found;
-          break;
-        }
-      }
+    if (isSuperuser) {
+      // Superusers can access any project
+      project = await getProjectById(projectId);
     } else {
-      // Regular users can only access their own projects
-      const projects = await getUserProjects(userId);
-      project = projects.find((p) => p.id === projectId);
+      // Regular users can only access projects from their company
+      const dbUser = await getUserByClerkId(userId);
+
+      if (!dbUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      const companyProjects = await getCompanyProjects(dbUser.company_id);
+      project = companyProjects.find((p) => p.id === projectId);
     }
 
     if (!project) {

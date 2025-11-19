@@ -3,7 +3,7 @@ import { currentUser as getClerkUser } from "@clerk/nextjs/server";
 import { getCurrentUser, isSuperAdmin, getUserPermissions } from "@/lib/permissions";
 import { getAllCompanies, getCompanyById, getCompanyStats } from "@/lib/companies";
 import { getAllUsers, getUsersByCompany } from "@/lib/users";
-import { getAllUserProjects, getCompanyProjects } from "@/lib/projects";
+import { getAllProjects, getCompanyProjects } from "@/lib/projects";
 import AdminClientNew from "./page-client-new";
 
 async function AdminDashboard() {
@@ -47,7 +47,7 @@ async function AdminDashboard() {
     companies = companiesWithStats;
 
     users = await getAllUsers();
-    projects = await getAllUserProjects();
+    projects = await getAllProjects();
   } else {
     // Company admin sees only their company
     if (!currentUser || !currentUser.company_id) {

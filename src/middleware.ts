@@ -18,10 +18,17 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Check if this is the clients subdomain
   if (hostname.startsWith("clients.")) {
+    // Don't rewrite public routes on subdomain - redirect to main domain instead
+    if (url.pathname === "/contact" || url.pathname === "/sign-in" || url.pathname === "/sign-up") {
+      const mainDomain = hostname.replace("clients.", "");
+      return NextResponse.redirect(new URL(url.pathname, `${req.nextUrl.protocol}//${mainDomain}`));
+    }
+
     // If on subdomain root, redirect to /clients
     if (url.pathname === "/") {
       return NextResponse.rewrite(new URL("/clients", req.url));
     }
+
     // For other paths on subdomain, keep the URL but rewrite to /clients path
     if (!url.pathname.startsWith("/clients")) {
       const newUrl = new URL(`/clients${url.pathname}`, req.url);
@@ -30,9 +37,13 @@ export default clerkMiddleware(async (auth, req) => {
     }
   }
 
-  // Allow public routes without protection
+  // Protect non-public routes and redirect to sign-in if not authenticated
   if (!isPublicRoute(req)) {
-    await auth.protect();
+    const signInUrl = new URL("/sign-in", req.url);
+    await auth.protect({
+      unauthenticatedUrl: signInUrl.toString(),
+      unauthorizedUrl: signInUrl.toString(),
+    });
   }
 
   // Return without additional protection for public routes

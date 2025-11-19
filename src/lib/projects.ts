@@ -108,6 +108,7 @@ export async function getUserProjects(userId: string): Promise<Project[]> {
 
 /**
  * Get all users with their projects (for admin)
+ * @deprecated Use getAllProjects instead
  */
 export async function getAllUserProjects(): Promise<ProjectStore> {
   try {
@@ -136,6 +137,29 @@ export async function getAllUserProjects(): Promise<ProjectStore> {
     return projectStore;
   } catch (error) {
     return {};
+  }
+}
+
+/**
+ * Get all projects (for superuser admin)
+ */
+export async function getAllProjects(): Promise<Project[]> {
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all projects:', error);
+      return [];
+    }
+
+    return (data || []).map(rowToProject);
+  } catch (error) {
+    console.error('Error fetching all projects:', error);
+    return [];
   }
 }
 

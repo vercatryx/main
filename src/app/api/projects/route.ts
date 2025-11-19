@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { addProject, getUserProjects } from '@/lib/projects';
+import { getUserByClerkId } from '@/lib/users';
 
 // Get projects for the authenticated user
 export async function GET() {
@@ -25,7 +26,7 @@ export async function GET() {
   }
 }
 
-// Add a project (admin only)
+// Add a project (superuser only)
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -34,6 +35,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    // Check if they're a superuser
+    const clerk = await clerkClient();
+    const clerkUser = await clerk.users.getUser(userId);
+    const isSuperuser = (clerkUser.publicMetadata as { role?: string })?.role === 'superuser';
+
+    // Only superusers can create projects
+    if (!isSuperuser) {
+      return NextResponse.json(
+        { error: 'Only superusers can create projects' },
+        { status: 403 }
       );
     }
 

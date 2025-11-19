@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import MeetingsModal from "@/components/client/meetings-modal";
+import LogoWineFill from "@/components/loading";
 
 interface Project {
   id: string;
@@ -477,7 +478,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         body: JSON.stringify({
           message: message || '',
           userId: clerkUser?.id,
-          userName: clerkUser?.fullName,
+          userName: userName,
           attachments: attachments.length > 0 ? attachments : undefined,
         }),
       });
@@ -628,7 +629,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         body: JSON.stringify({
           message: '',
           userId: clerkUser?.id,
-          userName: clerkUser?.fullName,
+          userName: userName,
           attachments: [attachment],
         }),
       });
@@ -727,7 +728,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   };
 
   const deleteEntireChat = async () => {
-    if (!chatProjectId || !isAdmin) return;
+    if (!chatProjectId || !isSuperAdmin) return;
 
     if (!confirm('Delete entire chat history? This will delete all messages and attachments. This cannot be undone.')) return;
 
@@ -765,7 +766,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {isAdmin && (
+                  {isSuperAdmin && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -800,10 +801,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${
-                      msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
+                    className={`flex flex-col ${
+                      msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
                     }`}
                   >
+                    <p className="text-xs text-gray-400 mb-1 px-1">
+                      {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
+                    </p>
                     <div
                       className={`rounded-lg px-3 py-2 max-w-xs ${
                         msg.userId === clerkUser?.id
@@ -1018,7 +1022,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 {getProjectForChat()?.title}
               </h3>
               <div className="flex items-center gap-1">
-                {isAdmin && (
+                {isSuperAdmin && (
                   <button
                     onClick={deleteEntireChat}
                     className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1046,10 +1050,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${
-                      msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
+                    className={`flex flex-col ${
+                      msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
                     }`}
                   >
+                    <p className="text-xs text-gray-400 mb-1 px-1">
+                      {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
+                    </p>
                     <div
                       className={`rounded-lg px-3 py-2 max-w-md ${
                         msg.userId === clerkUser?.id
@@ -1271,7 +1278,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <SignOutButton>
+                  <SignOutButton redirectUrl="/sign-in">
                     <DropdownMenuItem className="text-red-400 hover:!text-red-400 hover:!bg-red-900/20 cursor-pointer">
                       <LogOut className="w-4 h-4 mr-2" />
                       Log Out
@@ -1475,7 +1482,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {isAdmin && (
+                  {isSuperAdmin && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1503,10 +1510,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   {messages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex ${
-                        msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
+                      className={`flex flex-col ${
+                        msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
                       }`}
                     >
+                      <p className="text-xs text-gray-400 mb-1 px-1">
+                        {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
+                      </p>
                       <div
                         className={`rounded-lg px-3 py-2 max-w-md ${
                           msg.userId === clerkUser?.id
@@ -1715,8 +1725,14 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               {isProjectLoading && (
                 <div className="absolute inset-0 bg-gray-950 flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 border-4 border-blue-700/30 border-t-blue-600 rounded-full animate-spin" />
-                    <p className="text-gray-400 text-sm">Loading {selectedProject.title}...</p>
+                    <LogoWineFill
+                      width={300}
+                      duration={10}
+                      color="#ff0000"
+                      baseColor="#555555"
+                      outlineColor="#ffffff"
+                    />
+                    <p className="text-gray-400 text-lg mt-4">Loading {selectedProject.title}...</p>
                   </div>
                 </div>
               )}
@@ -1748,7 +1764,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       <MeetingsModal
         isOpen={showMeetingsModal}
         onClose={() => setShowMeetingsModal(false)}
-        isAdmin={isAdmin}
+        isAdmin={isSuperAdmin}
         userName={userName}
         userId={clerkUser?.id || ''}
         // TODO: usersWithProjects is not defined. This needs to be passed from the server component.

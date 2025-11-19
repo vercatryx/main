@@ -48,7 +48,7 @@ export default async function ClientsPage() {
 
   // Super admins can access clients page to view all projects
   if (superAdmin) {
-    const userName = clerkUser.firstName || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
+    const userName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
 
     // Fetch all companies and users for super admin
     const allCompanies = await getAllCompanies();
@@ -81,7 +81,7 @@ export default async function ClientsPage() {
             <p className="text-lg text-gray-400 mb-8">
               Your account has not been set up yet. Please contact your administrator.
             </p>
-            <SignOutButton>
+            <SignOutButton redirectUrl="/sign-in">
               <button className="px-6 py-3 bg-red-700/80 hover:bg-red-600 rounded-lg transition-colors text-white font-medium">
                 Sign Out
               </button>
@@ -116,7 +116,7 @@ export default async function ClientsPage() {
   // Get projects for user's company
   const projects = await getCompanyProjects(userWithCompany.company_id);
 
-  const userName = userWithCompany.first_name || clerkUser.firstName || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
+  const userName = [userWithCompany.first_name, userWithCompany.last_name].filter(Boolean).join(' ') || [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>

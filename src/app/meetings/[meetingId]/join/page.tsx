@@ -56,12 +56,15 @@ async function JoinMeetingPage({ params }: RouteParams) {
   const displayName = user.firstName && user.lastName
     ? `${user.firstName} ${user.lastName}`
     : user.emailAddresses[0]?.emailAddress || 'Guest';
+  const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };
+  const isSuperuser = publicMetadata?.role === 'superuser';
 
   return (
     <JitsiMeetClient
       meeting={meeting}
       userId={userId}
       displayName={displayName}
+      isSuperuser={isSuperuser}
     />
   );
 }

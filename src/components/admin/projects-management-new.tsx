@@ -147,13 +147,15 @@ export default function ProjectsManagementNew({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">Projects</h2>
-        <button
-          onClick={openAddModal}
-          className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Project
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Project
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -167,22 +169,24 @@ export default function ProjectsManagementNew({
                 <FolderOpen className="w-5 h-5 text-blue-400" />
                 <h3 className="font-semibold text-lg">{project.title}</h3>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => openEditModal(project)}
-                  className="p-1.5 hover:bg-gray-800/60 rounded transition-colors"
-                  title="Edit project"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(project.id)}
-                  className="p-1.5 hover:bg-red-900/40 rounded transition-colors text-red-400"
-                  title="Delete project"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {isSuperAdmin && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEditModal(project)}
+                    className="p-1.5 hover:bg-gray-800/60 rounded transition-colors"
+                    title="Edit project"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(project.id)}
+                    className="p-1.5 hover:bg-red-900/40 rounded transition-colors text-red-400"
+                    title="Delete project"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {project.description && (

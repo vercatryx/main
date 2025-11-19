@@ -2,10 +2,14 @@ import { supabase } from './supabase';
 
 export interface Meeting {
   id: string;
+  projectId?: string; // Optional - meetings don't always need a project
+  companyId?: string; // Optional - for public meetings
   title: string;
   description?: string;
   hostUserId: string; // Clerk user ID of the host (admin)
   participantUserIds: string[]; // Array of Clerk user IDs
+  participantCompanyIds: string[]; // Array of Company UUIDs for company-wide access
+  accessType: 'users' | 'company' | 'public'; // users = specific users, company = all users in companies, public = anyone with link
   scheduledAt: string; // ISO date string
   duration: number; // Duration in minutes
   jitsiRoomName: string; // Unique Jitsi room name
@@ -19,10 +23,14 @@ export interface Meeting {
 // Type for database row (snake_case from Supabase)
 type MeetingRow = {
   id: string;
+  project_id: string | null;
+  company_id: string | null;
   title: string;
   description: string | null;
   host_user_id: string;
   participant_user_ids: string[];
+  participant_company_ids: string[];
+  access_type: 'users' | 'company' | 'public';
   scheduled_at: string;
   duration: number;
   jitsi_room_name: string;
@@ -39,10 +47,14 @@ type MeetingRow = {
 function rowToMeeting(row: MeetingRow): Meeting {
   return {
     id: row.id,
+    projectId: row.project_id || undefined,
+    companyId: row.company_id || undefined,
     title: row.title,
     description: row.description || undefined,
     hostUserId: row.host_user_id,
-    participantUserIds: row.participant_user_ids,
+    participantUserIds: row.participant_user_ids || [],
+    participantCompanyIds: row.participant_company_ids || [],
+    accessType: row.access_type,
     scheduledAt: row.scheduled_at,
     duration: row.duration,
     jitsiRoomName: row.jitsi_room_name,
@@ -61,10 +73,14 @@ function meetingToRow(meeting: Partial<Meeting>): Partial<MeetingRow> {
   const row: Partial<MeetingRow> = {};
 
   if (meeting.id !== undefined) row.id = meeting.id;
+  if (meeting.projectId !== undefined) row.project_id = meeting.projectId || null;
+  if (meeting.companyId !== undefined) row.company_id = meeting.companyId || null;
   if (meeting.title !== undefined) row.title = meeting.title;
   if (meeting.description !== undefined) row.description = meeting.description || null;
   if (meeting.hostUserId !== undefined) row.host_user_id = meeting.hostUserId;
   if (meeting.participantUserIds !== undefined) row.participant_user_ids = meeting.participantUserIds;
+  if (meeting.participantCompanyIds !== undefined) row.participant_company_ids = meeting.participantCompanyIds;
+  if (meeting.accessType !== undefined) row.access_type = meeting.accessType;
   if (meeting.scheduledAt !== undefined) row.scheduled_at = meeting.scheduledAt;
   if (meeting.duration !== undefined) row.duration = meeting.duration;
   if (meeting.jitsiRoomName !== undefined) row.jitsi_room_name = meeting.jitsiRoomName;

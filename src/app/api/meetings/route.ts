@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     // Only superusers can create meetings
     if (publicMetadata?.role !== 'superuser') {
       return NextResponse.json(
-        { error: 'Only admins can create meetings' },
+        { error: 'Only superusers can create meetings' },
         { status: 403 }
       );
     }
@@ -65,14 +65,31 @@ export async function POST(request: Request) {
       title,
       description,
       participantUserIds,
+      participantCompanyIds,
+      accessType,
       scheduledAt,
       duration,
     } = body;
 
     // Validate required fields
-    if (!title || !scheduledAt || !duration || !participantUserIds) {
+    if (!title || !scheduledAt || !duration || !accessType) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate access type specific requirements
+    if (accessType === 'users' && (!participantUserIds || participantUserIds.length === 0)) {
+      return NextResponse.json(
+        { error: 'At least one user must be selected for user-specific meetings' },
+        { status: 400 }
+      );
+    }
+
+    if (accessType === 'company' && (!participantCompanyIds || participantCompanyIds.length === 0)) {
+      return NextResponse.json(
+        { error: 'At least one company must be selected for company-wide meetings' },
         { status: 400 }
       );
     }
@@ -87,6 +104,8 @@ export async function POST(request: Request) {
       description: description || '',
       hostUserId: userId,
       participantUserIds: Array.isArray(participantUserIds) ? participantUserIds : [],
+      participantCompanyIds: Array.isArray(participantCompanyIds) ? participantCompanyIds : [],
+      accessType: accessType || 'users',
       scheduledAt,
       duration,
       jitsiRoomName,

@@ -5,7 +5,7 @@ import { Meeting } from "@/lib/meetings";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Users, Video, Plus, Trash2, X } from "lucide-react";
+import { Calendar, Clock, Users, Video, Plus, Trash2, X, Link2, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,11 @@ interface SerializableUser {
   publicMetadata: any;
 }
 
+interface Company {
+  id: string;
+  name: string;
+}
+
 interface MeetingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,10 +46,13 @@ interface MeetingsModalProps {
   userName: string;
   userId: string;
   users?: SerializableUser[];
+  companies?: Company[];
 }
 
-export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, userId, users }: MeetingsModalProps) {
+export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, userId, users: propUsers, companies: propCompanies }: MeetingsModalProps) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [users, setUsers] = useState<SerializableUser[]>(propUsers || []);
+  const [companies, setCompanies] = useState<Company[]>(propCompanies || []);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -54,7 +62,9 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
     description: "",
     scheduledAt: "",
     duration: "60",
+    accessType: "users" as "users" | "company" | "public",
     participantUserIds: [] as string[],
+    participantCompanyIds: [] as string[],
   });
 
   const refreshMeetings = async () => {
@@ -72,9 +82,37 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
     }
   };
 
+  const fetchUsersAndCompanies = async () => {
+    try {
+      // Fetch Clerk users if admin
+      if (isAdmin) {
+        const usersResponse = await fetch('/api/clerk/users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.users || []);
+        } else {
+          console.error('Failed to fetch users:', await usersResponse.text());
+        }
+
+        // Fetch companies
+        const companiesResponse = await fetch('/api/companies');
+        if (companiesResponse.ok) {
+          const companiesData = await companiesResponse.json();
+          // API returns array directly, not wrapped in { companies: [] }
+          setCompanies(Array.isArray(companiesData) ? companiesData : []);
+        } else {
+          console.error('Failed to fetch companies:', await companiesResponse.text());
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users/companies:', error);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       refreshMeetings();
+      fetchUsersAndCompanies();
     }
   }, [isOpen]);
 
@@ -142,8 +180,20 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       });
 
       if (response.ok) {
+        const data = await response.json();
         await refreshMeetings();
         closeCreateModal();
+
+        // Show meeting link for public meetings
+        if (formData.accessType === 'public') {
+          const meetingUrl = `${window.location.origin}/meetings/${data.meeting.id}/join`;
+          const message = `Meeting created successfully!\n\nMeeting Link:\n${meetingUrl}\n\nShare this link with anyone you want to invite.`;
+
+          // Show alert with link
+          if (confirm(message + '\n\nClick OK to copy the link to clipboard.')) {
+            navigator.clipboard.writeText(meetingUrl);
+          }
+        }
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to create meeting');
@@ -181,7 +231,9 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       description: "",
       scheduledAt: "",
       duration: "60",
+      accessType: "users",
       participantUserIds: [],
+      participantCompanyIds: [],
     });
     setShowCreateModal(true);
   };
@@ -193,7 +245,9 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       description: "",
       scheduledAt: "",
       duration: "60",
+      accessType: "users",
       participantUserIds: [],
+      participantCompanyIds: [],
     });
   };
 
@@ -203,6 +257,15 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       participantUserIds: prev.participantUserIds.includes(userId)
         ? prev.participantUserIds.filter((id) => id !== userId)
         : [...prev.participantUserIds, userId],
+    }));
+  };
+
+  const toggleCompany = (companyId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      participantCompanyIds: prev.participantCompanyIds.includes(companyId)
+        ? prev.participantCompanyIds.filter((id) => id !== companyId)
+        : [...prev.participantCompanyIds, companyId],
     }));
   };
 
@@ -307,7 +370,11 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                       <div className="flex items-start gap-2 text-sm text-gray-300">
                         <Users className="h-4 w-4 text-gray-400 mt-0.5" />
                         <div className="flex-1">
-                          {getParticipantNames(meeting).length > 0 ? (
+                          {meeting.accessType === 'public' ? (
+                            <Badge className="bg-green-900/60 text-green-300">Public - Anyone with link</Badge>
+                          ) : meeting.accessType === 'company' ? (
+                            <Badge className="bg-purple-900/60 text-purple-300">Company-wide</Badge>
+                          ) : getParticipantNames(meeting).length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {getParticipantNames(meeting).map((name, idx) => (
                                 <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-800/60 text-gray-300">
@@ -320,6 +387,24 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           )}
                         </div>
                       </div>
+                      {meeting.accessType === 'public' && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Link2 className="h-4 w-4 text-gray-400" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto p-0 text-blue-400 hover:text-blue-300 hover:bg-transparent"
+                            onClick={() => {
+                              const url = `${window.location.origin}/meetings/${meeting.id}/join`;
+                              navigator.clipboard.writeText(url);
+                              alert('Meeting link copied to clipboard!');
+                            }}
+                          >
+                            <Copy className="mr-1 h-3 w-3" />
+                            Copy Meeting Link
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                     <CardFooter className={isAdmin ? "flex gap-2" : ""}>
                       {canJoinMeeting(meeting) ? (
@@ -429,31 +514,88 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
               </div>
 
               <div className="space-y-2">
-                <Label className="text-gray-200">Participants ({formData.participantUserIds.length} selected)</Label>
-                <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
-                  {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
-                    <div key={user.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`user-${user.id}`}
-                        checked={formData.participantUserIds.includes(user.id)}
-                        onCheckedChange={() => toggleParticipant(user.id)}
-                      />
-                      <label
-                        htmlFor={`user-${user.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {user.firstName} {user.lastName} ({user.emailAddresses[0]?.emailAddress})
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                <Label className="text-gray-200">Access Type</Label>
+                <Select
+                  value={formData.accessType}
+                  onValueChange={(value: "users" | "company" | "public") => setFormData({ ...formData, accessType: value })}
+                >
+                  <SelectTrigger className="bg-gray-800/80 border-gray-700/50 text-gray-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800/90 border-gray-700/50 text-white">
+                    <SelectItem value="users">Specific Users</SelectItem>
+                    <SelectItem value="company">Entire Company</SelectItem>
+                    <SelectItem value="public">Public (Anyone with link)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {formData.accessType === 'users' && users && (
+                <div className="space-y-2">
+                  <Label className="text-gray-200">Select Users ({formData.participantUserIds.length} selected)</Label>
+                  <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
+                    {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
+                      <div key={user.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`user-${user.id}`}
+                          checked={formData.participantUserIds.includes(user.id)}
+                          onCheckedChange={() => toggleParticipant(user.id)}
+                        />
+                        <label
+                          htmlFor={`user-${user.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {user.firstName} {user.lastName} ({user.emailAddresses[0]?.emailAddress})
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.accessType === 'company' && companies && (
+                <div className="space-y-2">
+                  <Label className="text-gray-200">Select Companies ({formData.participantCompanyIds.length} selected)</Label>
+                  <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
+                    {companies.map((company) => (
+                      <div key={company.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`company-${company.id}`}
+                          checked={formData.participantCompanyIds.includes(company.id)}
+                          onCheckedChange={() => toggleCompany(company.id)}
+                        />
+                        <label
+                          htmlFor={`company-${company.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {company.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.accessType === 'public' && (
+                <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4">
+                  <p className="text-sm text-blue-300">
+                    <strong>Public Meeting:</strong> Anyone with the meeting link will be able to join. The link will be provided after creation.
+                  </p>
+                </div>
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeCreateModal}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={formData.participantUserIds.length === 0} className="bg-blue-700/80 hover:bg-blue-600">
+                <Button
+                  type="submit"
+                  disabled={
+                    (formData.accessType === 'users' && formData.participantUserIds.length === 0) ||
+                    (formData.accessType === 'company' && formData.participantCompanyIds.length === 0)
+                  }
+                  className="bg-blue-700/80 hover:bg-blue-600"
+                >
                   Create Meeting
                 </Button>
               </DialogFooter>

@@ -42,7 +42,7 @@ export default function AdminClientNew({
   userEmail,
   isSuperAdmin,
 }: AdminClientNewProps) {
-  const [activeTab, setActiveTab] = useState<TabType>(isSuperAdmin ? "companies" : "projects");
+  const [activeTab, setActiveTab] = useState<TabType>(isSuperAdmin ? "companies" : "users");
 
   // Convert projects to flat array with company info
   const projectsArray: Project[] = Array.isArray(initialProjects)
@@ -65,7 +65,7 @@ export default function AdminClientNew({
               {isSuperAdmin ? "Super Admin" : "Company Admin"} - {userEmail}
             </p>
           </div>
-          <SignOutButton>
+          <SignOutButton redirectUrl="/sign-in">
             <button className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors">
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -107,20 +107,22 @@ export default function AdminClientNew({
               {initialUsers.length}
             </span>
           </button>
-          <button
-            onClick={() => setActiveTab("projects")}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-              activeTab === "projects"
-                ? "border-blue-600 text-blue-400"
-                : "border-transparent text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            <FolderOpen className="w-5 h-5" />
-            Projects
-            <span className="px-2 py-0.5 bg-gray-800/60 rounded text-xs">
-              {projectsArray.length}
-            </span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab("projects")}
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+                activeTab === "projects"
+                  ? "border-blue-600 text-blue-400"
+                  : "border-transparent text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              <FolderOpen className="w-5 h-5" />
+              Projects
+              <span className="px-2 py-0.5 bg-gray-800/60 rounded text-xs">
+                {projectsArray.length}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -138,7 +140,7 @@ export default function AdminClientNew({
           />
         )}
 
-        {activeTab === "projects" && (
+        {activeTab === "projects" && isSuperAdmin && (
           <ProjectsManagementNew
             initialProjects={projectsArray}
             companies={companies}
