@@ -12,7 +12,7 @@ import { getUserProjectPermissions, setUserProjectPermissions } from '@/lib/user
 // GET - Get projects user has access to
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth();
@@ -21,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Get the requesting user
     const requestingUser = await getUserByClerkId(userId);
@@ -58,7 +58,7 @@ export async function GET(
 // PUT - Set which projects user can access (admin only)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth();
@@ -67,7 +67,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { projectIds } = body;
 
