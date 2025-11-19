@@ -4,10 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserById } from '@/lib/users';
+import { getUserById, updateUser } from '@/lib/users';
 import { getCompanyById } from '@/lib/companies';
 import { sendInvitationEmail } from '@/lib/invitations';
 import { canManageUser, getCurrentUser } from '@/lib/permissions';
+import { clerkClient } from '@clerk/nextjs/server';
 
 export async function POST(
   req: NextRequest,
@@ -33,10 +34,45 @@ export async function POST(
       );
     }
 
-    // Check if user already has a Clerk account
-    if (user.clerk_user_id) {
+    // Check if email already has a Clerk account
+    let clerkUserId: string | null = user.clerk_user_id;
+    let shouldSendInvitation = true;
+
+    try {
+      const clerk = await clerkClient();
+      const clerkUsers = await clerk.users.getUserList({
+        emailAddress: [user.email],
+      });
+
+      if (clerkUsers.data.length > 0) {
+        // User already has a Clerk account - link it immediately
+        const existingClerkUser = clerkUsers.data[0];
+        clerkUserId = existingClerkUser.id;
+        shouldSendInvitation = false;
+
+        // Update the user with Clerk ID and activate them
+        await updateUser(user.id, {
+          clerk_user_id: clerkUserId,
+          status: 'active',
+        });
+
+        console.log(`Found existing Clerk account for ${user.email}, linked and activated user`);
+
+        return NextResponse.json({
+          success: true,
+          message: `User already has an account and was linked successfully`,
+          linked: true,
+        });
+      }
+    } catch (clerkError) {
+      console.error('Error checking Clerk for existing user:', clerkError);
+      // Continue with normal flow if Clerk check fails
+    }
+
+    // If user already linked (from database), don't send invitation again
+    if (user.clerk_user_id && !clerkUserId) {
       return NextResponse.json(
-        { error: 'User already has an account' },
+        { error: 'User already has an account linked' },
         { status: 400 }
       );
     }
@@ -76,6 +112,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: `Invitation sent to ${user.email}`,
+      linked: false,
     });
   } catch (error) {
     console.error('Error sending invitation:', error);

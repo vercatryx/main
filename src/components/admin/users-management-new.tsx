@@ -91,9 +91,14 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
         });
 
         if (res.ok) {
-          const newUser = await res.json();
+          const response = await res.json();
           const company = companies.find(c => c.id === formData.company_id);
-          setUsers(prev => [...prev, { ...newUser, company: company! }]);
+          setUsers(prev => [...prev, { ...response, company: company! }]);
+
+          // Show different message based on whether user was linked or invited
+          if (response.message) {
+            alert(response.message);
+          }
         } else {
           alert("Failed to create user");
         }
@@ -151,6 +156,21 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
       if (res.ok) {
         const result = await res.json();
         alert(result.message || "Invitation sent successfully!");
+
+        // If user was linked to existing account, refresh the user list
+        if (result.linked) {
+          // Fetch updated user data
+          const userRes = await fetch(`/api/users/${userId}`);
+          if (userRes.ok) {
+            const updatedUser = await userRes.json();
+            const companyRes = await fetch(`/api/companies/${updatedUser.company_id}`);
+            const company = await companyRes.json();
+
+            setUsers(prev => prev.map(u =>
+              u.id === userId ? { ...updatedUser, company } : u
+            ));
+          }
+        }
       } else {
         const error = await res.json();
         alert(error.error || "Failed to send invitation");

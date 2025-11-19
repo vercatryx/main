@@ -38,16 +38,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { targetUserId, title, url, description } = body;
+    const { targetCompanyId, title, url, description } = body;
 
-    if (!targetUserId || !title || !url) {
+    if (!targetCompanyId || !title || !url) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    const project = await addProject(targetUserId, title, url, description);
+    const project = await addProject(targetCompanyId, title, url, description);
     return NextResponse.json({ project });
   } catch (error) {
     console.error('Error creating project:', error);

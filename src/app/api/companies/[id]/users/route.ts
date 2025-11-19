@@ -9,6 +9,7 @@ import { getUsersByCompany, createUser } from '@/lib/users';
 import { getCompanyById } from '@/lib/companies';
 import { requireCompanyAccess, requireCompanyAdmin, getCurrentUser } from '@/lib/permissions';
 import { sendInvitationEmail } from '@/lib/invitations';
+import { clerkClient } from '@clerk/nextjs/server';
 
 export async function GET(
   req: NextRequest,
@@ -54,7 +55,34 @@ export async function POST(
       );
     }
 
-    // Create user with pending status (will be activated when they sign up)
+    // Check if email already has a Clerk account
+    let clerkUserId: string | null = null;
+    let userStatus: 'pending' | 'active' = 'pending';
+    let shouldSendInvitation = true;
+
+    try {
+      const clerk = await clerkClient();
+      const clerkUsers = await clerk.users.getUserList({
+        emailAddress: [body.email],
+      });
+
+      if (clerkUsers.data.length > 0) {
+        // User already has a Clerk account - link it immediately
+        const existingClerkUser = clerkUsers.data[0];
+        clerkUserId = existingClerkUser.id;
+        userStatus = 'active'; // Activate immediately since they already have an account
+        shouldSendInvitation = false; // Don't send invitation - they're already signed up
+
+        console.log(`Found existing Clerk account for ${body.email}, linking user immediately`);
+      } else {
+        console.log(`No existing Clerk account for ${body.email}, will send invitation`);
+      }
+    } catch (clerkError) {
+      console.error('Error checking Clerk for existing user:', clerkError);
+      // Continue with normal flow if Clerk check fails
+    }
+
+    // Create user with appropriate status
     const user = await createUser({
       company_id: id,
       email: body.email,
@@ -62,34 +90,41 @@ export async function POST(
       last_name: body.last_name || null,
       phone: body.phone || null,
       role: body.role,
-      status: 'pending', // User starts as pending until they accept invitation
-      clerk_user_id: body.clerk_user_id || null,
+      status: userStatus, // 'active' if Clerk account exists, 'pending' otherwise
+      clerk_user_id: clerkUserId, // Link to Clerk account if it exists
     });
 
-    // Automatically send invitation email
-    try {
-      const company = await getCompanyById(id);
-      const currentUser = await getCurrentUser();
-      const inviterName = currentUser
-        ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-        : undefined;
+    // Send invitation email only if user doesn't have Clerk account
+    if (shouldSendInvitation) {
+      try {
+        const company = await getCompanyById(id);
+        const currentUser = await getCurrentUser();
+        const inviterName = currentUser
+          ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
+          : undefined;
 
-      if (company) {
-        await sendInvitationEmail({
-          email: user.email,
-          firstName: user.first_name || undefined,
-          lastName: user.last_name || undefined,
-          companyName: company.name,
-          companyId: company.id,
-          inviterName,
-        });
+        if (company) {
+          await sendInvitationEmail({
+            email: user.email,
+            firstName: user.first_name || undefined,
+            lastName: user.last_name || undefined,
+            companyName: company.name,
+            companyId: company.id,
+            inviterName,
+          });
+        }
+      } catch (emailError) {
+        console.error('Failed to send invitation email:', emailError);
+        // Don't fail the user creation if email fails
       }
-    } catch (emailError) {
-      console.error('Failed to send invitation email:', emailError);
-      // Don't fail the user creation if email fails
     }
 
-    return NextResponse.json(user, { status: 201 });
+    return NextResponse.json({
+      ...user,
+      message: clerkUserId
+        ? 'User added successfully and linked to existing account'
+        : 'User created and invitation sent'
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json(
