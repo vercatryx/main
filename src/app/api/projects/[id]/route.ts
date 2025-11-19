@@ -28,7 +28,7 @@ export async function PATCH(
       );
     }
 
-    const project = await updateProject(targetUserId, projectId, {
+    const project = await updateProject(projectId, {
       title,
       url,
       description,
@@ -77,7 +77,7 @@ export async function DELETE(
       );
     }
 
-    const success = await deleteProject(targetUserId, projectId);
+    const success = await deleteProject(projectId);
 
     if (!success) {
       return NextResponse.json(

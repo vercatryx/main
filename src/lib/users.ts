@@ -3,12 +3,14 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { currentUser } from '@clerk/nextjs/server';
 import type {
   User,
   UserWithCompany,
   CreateUserInput,
   UpdateUserInput,
   UserDisplayInfo,
+  UserRole,
 } from '@/types/company';
 
 const supabase = createClient(
@@ -32,6 +34,17 @@ export async function getUserByClerkId(clerkUserId: string): Promise<User | null
   }
 
   return data;
+}
+
+/**
+ * Get the currently logged-in user from the database
+ */
+export async function getCurrentUser(): Promise<User | null> {
+  const clerkUser = await currentUser();
+  if (!clerkUser) {
+    return null;
+  }
+  return getUserByClerkId(clerkUser.id);
 }
 
 /**
@@ -181,7 +194,13 @@ export async function hardDeleteUser(userId: string): Promise<void> {
 /**
  * Get user display info (formatted name or email)
  */
-export function getUserDisplayInfo(user: User): UserDisplayInfo {
+export function getUserDisplayInfo(user: {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  role: UserRole;
+}): UserDisplayInfo {
   const name = user.first_name && user.last_name
     ? `${user.first_name} ${user.last_name}`
     : user.first_name || user.last_name || user.email;

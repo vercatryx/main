@@ -76,6 +76,7 @@ interface Meeting {
 export default function ClientPortal({ projects, userName, companyName, user }: ClientPortalProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isAdmin = user.role === 'admin';
 
   // Create admin project for company admins
   const adminProject: Project | null = useMemo(() =>
@@ -161,7 +162,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { user } = useUser();
+  const { user: clerkUser } = useUser();
   const { getToken } = useAuth();
   const hasInitialized = useRef(false);
 
@@ -435,8 +436,8 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
         },
         body: JSON.stringify({
           message: message || '',
-          userId: user?.id,
-          userName: user?.fullName,
+          userId: clerkUser?.id,
+          userName: clerkUser?.fullName,
           attachments: attachments.length > 0 ? attachments : undefined,
         }),
       });
@@ -586,8 +587,8 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
         },
         body: JSON.stringify({
           message: '',
-          userId: user?.id,
-          userName: user?.fullName,
+          userId: clerkUser?.id,
+          userName: clerkUser?.fullName,
           attachments: [attachment],
         }),
       });
@@ -760,12 +761,12 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                   <div
                     key={msg.id}
                     className={`flex ${
-                      msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                      msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
                     }`}
                   >
                     <div
                       className={`rounded-lg px-3 py-2 max-w-xs ${
-                        msg.userId === user?.id
+                        msg.userId === clerkUser?.id
                           ? 'bg-red-700/80 text-white'
                           : 'bg-gray-800/60 text-gray-200'
                       }`}
@@ -1006,12 +1007,12 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                   <div
                     key={msg.id}
                     className={`flex ${
-                      msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                      msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
                     }`}
                   >
                     <div
                       className={`rounded-lg px-3 py-2 max-w-md ${
-                        msg.userId === user?.id
+                        msg.userId === clerkUser?.id
                           ? 'bg-red-700/80 text-white'
                           : 'bg-gray-800/70 text-gray-200'
                       }`}
@@ -1425,12 +1426,12 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                     <div
                       key={msg.id}
                       className={`flex ${
-                        msg.userId === user?.id ? 'justify-end' : 'justify-start'
+                        msg.userId === clerkUser?.id ? 'justify-end' : 'justify-start'
                       }`}
                     >
                       <div
                         className={`rounded-lg px-3 py-2 max-w-md ${
-                          msg.userId === user?.id
+                          msg.userId === clerkUser?.id
                             ? 'bg-blue-700/80 text-white'
                             : 'bg-gray-800/70 text-gray-200'
                         }`}
@@ -1671,14 +1672,9 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
         onClose={() => setShowMeetingsModal(false)}
         isAdmin={isAdmin}
         userName={userName}
-        userId={user?.id || ''}
-        users={usersWithProjects?.map(u => ({
-          id: u.id,
-          firstName: u.name.split(' ')[0] || null,
-          lastName: u.name.split(' ').slice(1).join(' ') || null,
-          emailAddresses: [{ emailAddress: u.email }],
-          publicMetadata: { role: 'user' }
-        }))}
+        userId={clerkUser?.id || ''}
+        // TODO: usersWithProjects is not defined. This needs to be passed from the server component.
+        users={[]}
       />
     </div>
   );

@@ -137,7 +137,7 @@ async function migrateUsers() {
         const newHostUserId = userMappings.get(meeting.host_user_id_old);
         const newParticipantIds = (meeting.participant_user_ids_old || [])
           .map((clerkId: string) => userMappings.get(clerkId))
-          .filter((id): id is string => id !== undefined);
+          .filter((id: string | undefined): id is string => id !== undefined);
 
         if (newHostUserId) {
           const { error: updateError } = await supabase

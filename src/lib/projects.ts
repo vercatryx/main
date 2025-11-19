@@ -116,10 +116,12 @@ export async function getAllUserProjects(): Promise<ProjectStore> {
   const projectStore: ProjectStore = {};
   (data || []).forEach((row) => {
     const project = rowToProject(row as ProjectRow);
-    if (!projectStore[project.userId]) {
-      projectStore[project.userId] = [];
+    if (project.userId) {
+      if (!projectStore[project.userId]) {
+        projectStore[project.userId] = [];
+      }
+      projectStore[project.userId].push(project);
     }
-    projectStore[project.userId].push(project);
   });
 
   return projectStore;
