@@ -1,40 +1,30 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
-import { getAllUserProjects } from '@/lib/projects';
+import { getAllUserProjects, getCompanyProjects } from '@/lib/projects';
+import { requireAuth, isSuperAdmin } from '@/lib/permissions';
 
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const currentUser = await requireAuth();
+    const superAdmin = await isSuperAdmin();
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    let projects;
+
+    if (superAdmin) {
+      // Super admin sees all projects (legacy format for backward compatibility)
+      projects = await getAllUserProjects();
+    } else {
+      // Company admin sees only their company's projects
+      const projectsList = await getCompanyProjects(currentUser.company_id);
+      // Convert to legacy format for backward compatibility
+      projects = { [currentUser.company_id]: projectsList };
     }
-
-    const client = await clerkClient();
-
-    // Check if user is superuser
-    const currentUser = await client.users.getUser(userId);
-    const publicMetadata = currentUser.publicMetadata as { role?: string };
-
-    if (publicMetadata?.role !== 'superuser') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-
-    // Fetch all projects
-    const projects = await getAllUserProjects();
 
     return NextResponse.json({ projects });
   } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to fetch projects' },
+      { status: error instanceof Error && error.message.includes('Forbidden') ? 403 : 500 }
     );
   }
 }

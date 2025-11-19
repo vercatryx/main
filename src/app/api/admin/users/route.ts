@@ -1,39 +1,28 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { getAllUsers, getUsersByCompany } from '@/lib/users';
+import { requireAuth, isSuperAdmin } from '@/lib/permissions';
 
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const currentUser = await requireAuth();
+    const superAdmin = await isSuperAdmin();
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    let users;
+
+    if (superAdmin) {
+      // Super admin sees all users across all companies
+      users = await getAllUsers();
+    } else {
+      // Company admin sees only their company's users
+      users = await getUsersByCompany(currentUser.company_id);
     }
-
-    const client = await clerkClient();
-
-    // Check if user is superuser
-    const currentUser = await client.users.getUser(userId);
-    const publicMetadata = currentUser.publicMetadata as { role?: string };
-
-    if (publicMetadata?.role !== 'superuser') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-
-    // Fetch all users
-    const { data: users } = await client.users.getUserList();
 
     return NextResponse.json({ users });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch users' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to fetch users' },
+      { status: error instanceof Error && error.message.includes('Forbidden') ? 403 : 500 }
     );
   }
 }

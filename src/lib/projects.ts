@@ -2,7 +2,8 @@ import { supabase } from './supabase';
 
 export interface Project {
   id: string;
-  userId: string; // Clerk user ID
+  companyId: string; // Company that owns this project
+  userId?: string; // Legacy field - will be deprecated
   title: string;
   url: string;
   description?: string;
@@ -17,7 +18,8 @@ interface ProjectStore {
 // Database row type (snake_case from Supabase)
 type ProjectRow = {
   id: string;
-  user_id: string;
+  company_id: string;
+  user_id?: string; // Legacy field
   title: string;
   url: string;
   description: string | null;
@@ -31,7 +33,8 @@ type ProjectRow = {
 function rowToProject(row: ProjectRow): Project {
   return {
     id: row.id,
-    userId: row.user_id,
+    companyId: row.company_id,
+    userId: row.user_id, // Legacy field
     title: row.title,
     url: row.url,
     description: row.description || undefined,
@@ -47,7 +50,8 @@ function projectToRow(project: Partial<Project>): Partial<ProjectRow> {
   const row: Partial<ProjectRow> = {};
 
   if (project.id !== undefined) row.id = project.id;
-  if (project.userId !== undefined) row.user_id = project.userId;
+  if (project.companyId !== undefined) row.company_id = project.companyId;
+  if (project.userId !== undefined) row.user_id = project.userId; // Legacy field
   if (project.title !== undefined) row.title = project.title;
   if (project.url !== undefined) row.url = project.url;
   if (project.description !== undefined) row.description = project.description || null;
@@ -58,7 +62,26 @@ function projectToRow(project: Partial<Project>): Partial<ProjectRow> {
 }
 
 /**
- * Get all projects for a specific user
+ * Get all projects for a specific company
+ */
+export async function getCompanyProjects(companyId: string): Promise<Project[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching company projects:', error);
+    return [];
+  }
+
+  return (data || []).map(rowToProject);
+}
+
+/**
+ * Get all projects for a specific user (LEGACY - kept for backward compatibility)
+ * @deprecated Use getCompanyProjects instead
  */
 export async function getUserProjects(userId: string): Promise<Project[]> {
   const { data, error } = await supabase
@@ -103,17 +126,17 @@ export async function getAllUserProjects(): Promise<ProjectStore> {
 }
 
 /**
- * Add a project for a user
+ * Add a project for a company
  */
 export async function addProject(
-  userId: string,
+  companyId: string,
   title: string,
   url: string,
   description?: string
 ): Promise<Project> {
   const newProject: Project = {
     id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    userId,
+    companyId,
     title,
     url,
     description,
@@ -141,7 +164,6 @@ export async function addProject(
  * Update a project
  */
 export async function updateProject(
-  userId: string,
   projectId: string,
   updates: { title?: string; url?: string; description?: string }
 ): Promise<Project | null> {
@@ -154,7 +176,6 @@ export async function updateProject(
     .from('projects')
     .update(row)
     .eq('id', projectId)
-    .eq('user_id', userId)
     .select()
     .single();
 
@@ -169,15 +190,11 @@ export async function updateProject(
 /**
  * Delete a project
  */
-export async function deleteProject(
-  userId: string,
-  projectId: string
-): Promise<boolean> {
+export async function deleteProject(projectId: string): Promise<boolean> {
   const { error } = await supabase
     .from('projects')
     .delete()
-    .eq('id', projectId)
-    .eq('user_id', userId);
+    .eq('id', projectId);
 
   if (error) {
     console.error('Error deleting project:', error);
@@ -185,4 +202,22 @@ export async function deleteProject(
   }
 
   return true;
+}
+
+/**
+ * Get a single project by ID
+ */
+export async function getProjectById(projectId: string): Promise<Project | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', projectId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching project:', error);
+    return null;
+  }
+
+  return data ? rowToProject(data as ProjectRow) : null;
 }

@@ -14,7 +14,8 @@ import MeetingsModal from "@/components/client/meetings-modal";
 
 interface Project {
   id: string;
-  userId: string;
+  companyId?: string;
+  userId?: string;
   title: string;
   url: string;
   description?: string;
@@ -22,18 +23,26 @@ interface Project {
   updatedAt: string;
 }
 
-interface UserWithProjects {
+interface UserWithCompany {
   id: string;
-  name: string;
+  company_id: string;
   email: string;
-  projects: Project[];
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  role: 'admin' | 'member';
+  is_active: boolean;
+  company: {
+    id: string;
+    name: string;
+  };
 }
 
 interface ClientPortalProps {
   userName: string;
-  isAdmin: boolean;
-  projects?: Project[];
-  usersWithProjects?: UserWithProjects[];
+  companyName: string;
+  projects: Project[];
+  user: UserWithCompany;
 }
 
 interface ChatAttachment {
@@ -64,36 +73,27 @@ interface Meeting {
   status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
 }
 
-export default function ClientPortal({ projects, userName, isAdmin, usersWithProjects }: ClientPortalProps) {
+export default function ClientPortal({ projects, userName, companyName, user }: ClientPortalProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // For admin: track selected user and get their projects
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  // Create admin project for admins (useMemo to prevent infinite loop)
+  // Create admin project for company admins
   const adminProject: Project | null = useMemo(() =>
-    isAdmin ? {
+    user.role === 'admin' ? {
       id: 'admin-dashboard',
-      userId: 'admin',
       title: 'Admin',
       url: '/admin',
       description: 'User Management Dashboard',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } : null,
-    [isAdmin]
+    [user.role]
   );
 
-  // Get current projects based on admin or regular user
-  const userProjects = isAdmin && usersWithProjects && selectedUserId
-    ? usersWithProjects.find(u => u.id === selectedUserId)?.projects || []
-    : projects || [];
-
-  // For admins, prepend the admin project to the list
-  const currentProjects = isAdmin && adminProject
-    ? [adminProject, ...userProjects]
-    : userProjects;
+  // For company admins, prepend the admin project to the list
+  const currentProjects = adminProject
+    ? [adminProject, ...projects]
+    : projects;
 
   // Helper function to update URL
   const updateURL = useCallback((params: { chat?: string; chatState?: string; userId?: string; project?: string }) => {
@@ -165,24 +165,9 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   const { getToken } = useAuth();
   const hasInitialized = useRef(false);
 
-  // Initialize selected user (admin only) from URL or default (only once)
-  useEffect(() => {
-    if (isAdmin && usersWithProjects && usersWithProjects.length > 0 && selectedUserId === null) {
-      const userIdFromUrl = searchParams.get('userId');
-      if (userIdFromUrl && usersWithProjects.find(u => u.id === userIdFromUrl)) {
-        setSelectedUserId(userIdFromUrl);
-      } else {
-        setSelectedUserId(usersWithProjects[0].id);
-      }
-    }
-  }, [isAdmin, usersWithProjects, searchParams, selectedUserId]);
-
   // Initialize selected project from URL or default
   useEffect(() => {
-    // For admins, wait until selectedUserId is set before initializing
-    const isAdminReady = !isAdmin || (isAdmin && selectedUserId !== null);
-
-    if (currentProjects.length > 0 && !hasInitialized.current && isAdminReady) {
+    if (currentProjects.length > 0 && !hasInitialized.current) {
       const projectIdFromUrl = projectIdFromUrlRef.current;
 
       // Try to find the project from URL
@@ -207,7 +192,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       }
       hasInitialized.current = true;
     }
-  }, [currentProjects, isAdmin, selectedUserId]);
+  }, [currentProjects]);
 
   // Detect mobile on mount
   useEffect(() => {
@@ -227,15 +212,13 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       updateURL({
         chat: chatProjectId || undefined,
         chatState: chatState,
-        userId: isAdmin && selectedUserId ? selectedUserId : undefined,
         project: selectedProject?.id || undefined,
       });
     }
-  }, [chatProjectId, chatState, selectedUserId, selectedProject, isAdmin, updateURL]);
+  }, [chatProjectId, chatState, selectedProject, updateURL]);
 
-  // Fetch upcoming meeting for regular users
+  // Fetch upcoming meeting
   useEffect(() => {
-    if (!isAdmin) {
       const fetchUpcomingMeeting = async () => {
         try {
           const res = await fetch('/api/meetings/upcoming');
@@ -260,8 +243,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       // Refresh every minute
       const interval = setInterval(fetchUpcomingMeeting, 60000);
       return () => clearInterval(interval);
-    }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -308,20 +290,6 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
       return () => clearInterval(pollInterval);
     }
   }, [chatProjectId, chatState]);
-  
-  // Update selected project when user changes (admin only) - but only after initialization
-  const previousUserIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (isAdmin && selectedUserId && usersWithProjects && adminProject && hasInitialized.current) {
-      // Only reset to admin dashboard if the user actually changed (not on initial load)
-      if (previousUserIdRef.current !== null && previousUserIdRef.current !== selectedUserId) {
-        console.log('👤 User changed, resetting to admin dashboard');
-        setSelectedProject(adminProject);
-      }
-      previousUserIdRef.current = selectedUserId;
-    }
-  }, [selectedUserId, isAdmin, usersWithProjects, adminProject]);
 
   // Debug: Log when selectedProject changes
   useEffect(() => {
@@ -394,7 +362,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
   }, []);
 
   // Only show "no projects" message for regular users (admins always have the Admin project)
-  if (currentProjects.length === 0 && !isAdmin) {
+  if (currentProjects.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white">
         <div className="text-center p-8">
@@ -756,7 +724,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {isAdmin && (
+                  {user.role === 'admin' && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -821,7 +789,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                       style={{ maxHeight: '200px' }}
                                     />
                                   </a>
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -832,7 +800,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                   )}
                                 </div>
                               ) : attachment.type === 'voice' ? (
-                                <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                <div className="flex items-center gap-2">
                                   <Mic className="w-4 h-4 text-blue-400" />
                                   <audio
                                     controls
@@ -847,7 +815,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                   )}
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300"
@@ -869,7 +837,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300 ml-1"
@@ -1009,7 +977,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 {getProjectForChat()?.title}
               </h3>
               <div className="flex items-center gap-1">
-                {isAdmin && (
+                {user.role === 'admin' && (
                   <button
                     onClick={deleteEntireChat}
                     className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1067,7 +1035,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                       style={{ maxHeight: '300px' }}
                                     />
                                   </a>
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1078,7 +1046,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                   )}
                                 </div>
                               ) : attachment.type === 'voice' ? (
-                                <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                <div className="flex items-center gap-2">
                                   <Mic className="w-4 h-4 text-blue-400" />
                                   <audio
                                     controls
@@ -1093,7 +1061,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                   )}
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300"
@@ -1115,7 +1083,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
-                                  {isAdmin && (
+                                  {user.role === 'admin' && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300 ml-1"
@@ -1250,9 +1218,9 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
             {/* Sidebar Header */}
             <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/40">
               <div>
-                <h2 className="text-xl font-bold mb-1 text-gray-100">Welcome, {userName}!</h2>
+                <h2 className="text-xl font-bold mb-1 text-gray-100">{companyName}</h2>
                 <p className="text-sm text-gray-400">
-                  {isAdmin ? 'Admin View - All Projects' : 'Your Projects'}
+                  Welcome, {userName}!
                 </p>
               </div>
               <DropdownMenu>
@@ -1273,7 +1241,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
             </div>
 
             {/* Upcoming Meeting for Users */}
-            {!isAdmin && upcomingMeeting && (
+            {upcomingMeeting && (
               <div className="p-4 border-b border-gray-800/50">
                 <div className="bg-red-950/30 border border-red-800/50 rounded-lg p-3">
                   <div className="flex items-start gap-2">
@@ -1314,43 +1282,10 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                 className="w-full flex items-center justify-center gap-2 bg-red-700/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
               >
                 <Video className="w-4 h-4" />
-                {isAdmin ? 'Manage Meetings' : 'My Meetings'}
+                My Meetings
               </button>
             </div>
 
-            {/* Admin User Selector */}
-            {isAdmin && (
-              <div className="p-4 border-b border-gray-800/50">
-                <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
-                  <UserCircle className="w-4 h-4" />
-                  View Client Projects
-                </label>
-                {usersWithProjects && usersWithProjects.length > 0 ? (
-                  <>
-                    <select
-                      value={selectedUserId || ''}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 focus:border-red-600/50 outline-none transition-colors"
-                    >
-                      {usersWithProjects.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} ({user.projects.length} project{user.projects.length !== 1 ? 's' : ''})
-                        </option>
-                      ))}
-                    </select>
-                    {selectedUserId && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {usersWithProjects.find(u => u.id === selectedUserId)?.email}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    No clients have projects yet. Use the Admin dashboard to add projects.
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* Projects List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -1461,7 +1396,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {isAdmin && (
+                  {user.role === 'admin' && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1519,7 +1454,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                         style={{ maxHeight: '300px' }}
                                       />
                                     </a>
-                                    {isAdmin && (
+                                    {user.role === 'admin' && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1545,7 +1480,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                     {attachment.duration && (
                                       <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                     )}
-                                    {isAdmin && (
+                                    {user.role === 'admin' && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="text-red-400 hover:text-red-300"
@@ -1567,7 +1502,7 @@ export default function ClientPortal({ projects, userName, isAdmin, usersWithPro
                                       <span className="flex-1 truncate">{attachment.filename}</span>
                                       <Download className="w-3 h-3" />
                                     </a>
-                                    {isAdmin && (
+                                    {user.role === 'admin' && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="text-red-400 hover:text-red-300 ml-1"

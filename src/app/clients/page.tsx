@@ -1,17 +1,15 @@
 import { Suspense } from "react";
-import { currentUser, clerkClient } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { SignIn } from "@clerk/nextjs";
-import { getUserProjects, getAllUserProjects } from "@/lib/projects";
+import { redirect } from "next/navigation";
+import { getCompanyProjects } from "@/lib/projects";
+import { getCurrentUser, getUserWithCompany } from "@/lib/users";
 import ClientPortal from "./page-client";
 
-interface UserPublicMetadata {
-  role?: "superuser" | "user";
-}
-
 export default async function ClientsPage() {
-  const user = await currentUser();
+  const clerkUser = await currentUser();
 
-  if (!user) {
+  if (!clerkUser) {
     return (
       <main className="min-h-screen bg-gray-950 text-white">
         <div className="flex items-center justify-center min-h-screen">
@@ -40,47 +38,59 @@ export default async function ClientsPage() {
     );
   }
 
-  const publicMetadata = user.publicMetadata as UserPublicMetadata;
-  const isAdmin = publicMetadata?.role === "superuser";
+  // Get user from database
+  const dbUser = await getCurrentUser();
 
-  const userName = user.firstName || user.emailAddresses[0].emailAddress.split('@')[0];
-
-  // If admin, get all projects and all users
-  if (isAdmin) {
-    const client = await clerkClient();
-    const { data: allUsers } = await client.users.getUserList();
-    const allProjects = await getAllUserProjects();
-
-    // Create a map of users with their projects
-    const usersWithProjects = allUsers
-      .filter(u => allProjects[u.id] && allProjects[u.id].length > 0) // Only users with projects
-      .map(u => ({
-        id: u.id,
-        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.emailAddresses[0]?.emailAddress || 'Unknown',
-        email: u.emailAddresses[0]?.emailAddress || '',
-        projects: allProjects[u.id] || []
-      }));
-
+  if (!dbUser) {
+    // User not in database yet - redirect to admin or show error
     return (
-      <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
-        <ClientPortal
-          userName={userName}
-          isAdmin={true}
-          usersWithProjects={usersWithProjects}
-        />
-      </Suspense>
+      <main className="min-h-screen bg-gray-950 text-white">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
+              Account Not Set Up
+            </h1>
+            <p className="text-lg text-gray-400 mb-8">
+              Your account has not been set up yet. Please contact your administrator.
+            </p>
+          </div>
+        </div>
+      </main>
     );
   }
 
-  // Regular user - just get their projects
-  const projects = await getUserProjects(user.id);
+  // Get user with company details
+  const userWithCompany = await getUserWithCompany(dbUser.id);
+
+  if (!userWithCompany) {
+    return (
+      <main className="min-h-screen bg-gray-950 text-white">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
+              Error Loading Account
+            </h1>
+            <p className="text-lg text-gray-400 mb-8">
+              Could not load your account information. Please try again later.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Get projects for user's company
+  const projects = await getCompanyProjects(userWithCompany.company_id);
+
+  const userName = userWithCompany.first_name || clerkUser.firstName || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
       <ClientPortal
         projects={projects}
         userName={userName}
-        isAdmin={false}
+        companyName={userWithCompany.company.name}
+        user={userWithCompany}
       />
     </Suspense>
   );
