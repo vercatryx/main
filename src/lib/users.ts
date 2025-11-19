@@ -2,8 +2,8 @@
  * User management functions for company-based system
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { currentUser } from '@clerk/nextjs/server';
+import { getServerSupabaseClient } from './supabase';
 import type {
   User,
   UserWithCompany,
@@ -13,27 +13,52 @@ import type {
   UserRole,
 } from '@/types/company';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 /**
  * Get user by Clerk user ID
  */
 export async function getUserByClerkId(clerkUserId: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('clerk_user_id', clerkUserId)
-    .single();
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('clerk_user_id', clerkUserId)
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 or 1 rows without error
 
-  if (error) {
-    console.error('Error fetching user by Clerk ID:', error);
+    if (error) {
+      // Silently handle database errors - return null if can't connect
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    // Silently handle any connection errors
     return null;
   }
+}
 
-  return data;
+/**
+ * Get user by email address
+ */
+export async function getUserByEmail(email: string): Promise<User | null> {
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) {
+      // Silently handle database errors - return null if can't connect
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    // Silently handle any connection errors
+    return null;
+  }
 }
 
 /**
@@ -51,101 +76,132 @@ export async function getCurrentUser(): Promise<User | null> {
  * Get user by ID
  */
 export async function getUserById(userId: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', userId)
-    .single();
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 or 1 rows without error
 
-  if (error) {
-    console.error('Error fetching user:', error);
+    if (error) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
     return null;
   }
-
-  return data;
 }
 
 /**
  * Get user with company details
  */
 export async function getUserWithCompany(userId: string): Promise<UserWithCompany | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select(`
-      *,
-      company:companies(*)
-    `)
-    .eq('id', userId)
-    .single();
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select(`
+        *,
+        company:companies(*)
+      `)
+      .eq('id', userId)
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 or 1 rows without error
 
-  if (error) {
-    console.error('Error fetching user with company:', error);
+    if (error) {
+      return null;
+    }
+
+    return data as unknown as UserWithCompany;
+  } catch (error) {
     return null;
   }
-
-  return data as unknown as UserWithCompany;
 }
 
 /**
  * Get all users in a company
  */
 export async function getUsersByCompany(companyId: string): Promise<User[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching company users:', error);
-    throw new Error('Failed to fetch company users');
+    if (error) {
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    return [];
   }
-
-  return data || [];
 }
 
 /**
  * Get all users (super admin only)
  */
 export async function getAllUsers(): Promise<UserWithCompany[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select(`
-      *,
-      company:companies(*)
-    `)
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select(`
+        *,
+        company:companies(*)
+      `)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching all users:', error);
-    throw new Error('Failed to fetch users');
+    if (error) {
+      console.error('Error in getAllUsers:', error);
+      return [];
+    }
+
+    if (!data) {
+      console.log('No users data returned');
+      return [];
+    }
+
+    console.log(`getAllUsers returned ${data.length} users`);
+    return data as unknown as UserWithCompany[];
+  } catch (error) {
+    console.error('Exception in getAllUsers:', error);
+    return [];
   }
-
-  return data as unknown as UserWithCompany[];
 }
 
 /**
  * Create a new user
  */
 export async function createUser(input: CreateUserInput): Promise<User> {
-  const { data, error } = await supabase
-    .from('users')
-    .insert(input)
-    .select()
-    .single();
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .insert(input)
+      .select()
+      .single();
 
-  if (error) {
+    if (error) {
+      console.error('Error creating user:', error);
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
     console.error('Error creating user:', error);
-    throw new Error('Failed to create user');
+    throw error;
   }
-
-  return data;
 }
 
 /**
  * Update a user
  */
 export async function updateUser(userId: string, input: UpdateUserInput): Promise<User> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('users')
     .update(input)
@@ -165,6 +221,7 @@ export async function updateUser(userId: string, input: UpdateUserInput): Promis
  * Delete a user (soft delete by setting is_active to false)
  */
 export async function deleteUser(userId: string): Promise<void> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('users')
     .update({ is_active: false })
@@ -180,6 +237,7 @@ export async function deleteUser(userId: string): Promise<void> {
  * Hard delete a user (permanently remove)
  */
 export async function hardDeleteUser(userId: string): Promise<void> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('users')
     .delete()
@@ -219,6 +277,7 @@ export function getUserDisplayInfo(user: {
 export async function getUsersDisplayInfo(userIds: string[]): Promise<UserDisplayInfo[]> {
   if (userIds.length === 0) return [];
 
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('users')
     .select('id, first_name, last_name, email, role')

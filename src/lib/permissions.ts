@@ -30,11 +30,23 @@ export async function getCurrentUser(): Promise<User | null> {
 
 /**
  * Require authentication - throws if not authenticated
+ * Returns user from database, or null for super admins without DB entry
  */
-export async function requireAuth(): Promise<User> {
+export async function requireAuth(): Promise<User | null> {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new Error('Unauthorized - not logged in');
+  }
+
+  // Super admins don't need to be in the database
+  const superAdmin = await isSuperAdmin();
+  if (superAdmin) {
+    return null; // Super admins don't have a database user entry
+  }
+
   const user = await getCurrentUser();
   if (!user) {
-    throw new Error('Unauthorized - user not found');
+    throw new Error('Unauthorized - user not found in database');
   }
   return user;
 }
@@ -51,14 +63,20 @@ export async function requireSuperAdmin(): Promise<void> {
 
 /**
  * Require company admin - throws if not company admin
+ * Returns null for super admins, User for company admins
  */
-export async function requireCompanyAdmin(companyId?: string): Promise<User> {
-  const user = await requireAuth();
-
+export async function requireCompanyAdmin(companyId?: string): Promise<User | null> {
   // Super admins can access everything
   const superAdmin = await isSuperAdmin();
   if (superAdmin) {
-    return user;
+    return null; // Super admins don't have a database user entry
+  }
+
+  const user = await requireAuth();
+
+  // requireAuth already checks if user exists (for non-super-admins)
+  if (!user) {
+    throw new Error('Unauthorized - user not found');
   }
 
   // Check if user is admin in their company
@@ -76,14 +94,19 @@ export async function requireCompanyAdmin(companyId?: string): Promise<User> {
 
 /**
  * Require access to a specific company - throws if no access
+ * Returns null for super admins, User for company users
  */
-export async function requireCompanyAccess(companyId: string): Promise<User> {
-  const user = await requireAuth();
-
+export async function requireCompanyAccess(companyId: string): Promise<User | null> {
   // Super admins can access all companies
   const superAdmin = await isSuperAdmin();
   if (superAdmin) {
-    return user;
+    return null; // Super admins don't have a database user entry
+  }
+
+  const user = await requireAuth();
+
+  if (!user) {
+    throw new Error('Unauthorized - user not found');
   }
 
   // Regular users can only access their own company
@@ -99,12 +122,12 @@ export async function requireCompanyAccess(companyId: string): Promise<User> {
  * (super admin can manage all, company admin can manage their company's users)
  */
 export async function canManageUser(targetUserId: string): Promise<boolean> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) return false;
-
   // Super admins can manage all users
   const superAdmin = await isSuperAdmin();
   if (superAdmin) return true;
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return false;
 
   // Company admins can manage users in their company
   if (currentUser.role === 'admin') {
@@ -120,12 +143,12 @@ export async function canManageUser(targetUserId: string): Promise<boolean> {
  * Check if user can manage a project
  */
 export async function canManageProject(projectCompanyId: string): Promise<boolean> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) return false;
-
   // Super admins can manage all projects
   const superAdmin = await isSuperAdmin();
   if (superAdmin) return true;
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return false;
 
   // Company admins can manage their company's projects
   if (currentUser.role === 'admin' && currentUser.company_id === projectCompanyId) {

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { currentUser as getClerkUser } from "@clerk/nextjs/server";
 import { getCurrentUser, isSuperAdmin, getUserPermissions } from "@/lib/permissions";
 import { getAllCompanies, getCompanyById, getCompanyStats } from "@/lib/companies";
 import { getAllUsers, getUsersByCompany } from "@/lib/users";
@@ -6,16 +7,19 @@ import { getAllUserProjects, getCompanyProjects } from "@/lib/projects";
 import AdminClientNew from "./page-client-new";
 
 async function AdminDashboard() {
+  // Check if user is super admin first (they don't need to be in database)
+  const superAdmin = await isSuperAdmin();
+
   // Get current user from database
   const currentUser = await getCurrentUser();
 
-  if (!currentUser) {
+  // Super admins don't need to be in the database
+  if (!superAdmin && !currentUser) {
     redirect("/clients");
   }
 
   // Get user permissions
   const permissions = await getUserPermissions();
-  const superAdmin = await isSuperAdmin();
 
   // Only super admins and company admins can access admin portal
   if (!permissions.isCompanyAdmin && !permissions.isSuperAdmin) {
@@ -46,6 +50,10 @@ async function AdminDashboard() {
     projects = await getAllUserProjects();
   } else {
     // Company admin sees only their company
+    if (!currentUser || !currentUser.company_id) {
+      throw new Error("Company admin must have a company");
+    }
+
     const company = await getCompanyById(currentUser.company_id);
     if (!company) {
       throw new Error("Company not found");
@@ -65,12 +73,17 @@ async function AdminDashboard() {
     projects = { [currentUser.company_id]: projectsList };
   }
 
+  // Get Clerk user for super admins who don't have DB entry
+  const clerkUser = await getClerkUser();
+  const userEmail = currentUser?.email || clerkUser?.emailAddresses[0]?.emailAddress || "Admin";
+
   return (
     <AdminClientNew
       companies={companies}
       initialUsers={users}
       initialProjects={projects}
       currentUser={currentUser}
+      userEmail={userEmail}
       isSuperAdmin={superAdmin}
     />
   );

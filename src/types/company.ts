@@ -10,6 +10,7 @@ export interface Company {
 }
 
 export type UserRole = 'admin' | 'member';
+export type UserStatus = 'pending' | 'active' | 'inactive';
 
 export interface User {
   id: string;
@@ -20,7 +21,8 @@ export interface User {
   last_name: string | null;
   phone: string | null;
   role: UserRole;
-  is_active: boolean;
+  status: UserStatus;
+  is_active: boolean; // Deprecated - use status instead
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +39,7 @@ export interface CreateUserInput {
   last_name?: string | null;
   phone?: string | null;
   role: UserRole;
+  status?: UserStatus;
 }
 
 export interface UpdateUserInput {
@@ -45,7 +48,9 @@ export interface UpdateUserInput {
   last_name?: string | null;
   phone?: string | null;
   role?: UserRole;
-  is_active?: boolean;
+  status?: UserStatus;
+  clerk_user_id?: string | null;
+  is_active?: boolean; // Deprecated - use status instead
 }
 
 export interface CreateCompanyInput {

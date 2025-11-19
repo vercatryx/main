@@ -19,19 +19,14 @@ export async function PATCH(
 
     const { id: projectId } = await context.params;
     const body = await request.json();
-    const { targetUserId, title, url, description } = body;
+    const { title, url, description, companyId } = body;
 
-    if (!targetUserId) {
-      return NextResponse.json(
-        { error: 'Missing targetUserId' },
-        { status: 400 }
-      );
-    }
-
+    // companyId is optional for updates (only needed when changing company)
     const project = await updateProject(projectId, {
       title,
       url,
       description,
+      ...(companyId && { companyId }),
     });
 
     if (!project) {
@@ -67,15 +62,6 @@ export async function DELETE(
     }
 
     const { id: projectId } = await context.params;
-    const { searchParams } = new URL(request.url);
-    const targetUserId = searchParams.get('userId');
-
-    if (!targetUserId) {
-      return NextResponse.json(
-        { error: 'Missing userId parameter' },
-        { status: 400 }
-      );
-    }
 
     const success = await deleteProject(projectId);
 

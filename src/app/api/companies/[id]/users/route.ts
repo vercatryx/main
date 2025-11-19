@@ -6,7 +6,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getUsersByCompany, createUser } from '@/lib/users';
-import { requireCompanyAccess, requireCompanyAdmin } from '@/lib/permissions';
+import { getCompanyById } from '@/lib/companies';
+import { requireCompanyAccess, requireCompanyAdmin, getCurrentUser } from '@/lib/permissions';
+import { sendInvitationEmail } from '@/lib/invitations';
 
 export async function GET(
   req: NextRequest,
@@ -52,6 +54,7 @@ export async function POST(
       );
     }
 
+    // Create user with pending status (will be activated when they sign up)
     const user = await createUser({
       company_id: id,
       email: body.email,
@@ -59,8 +62,31 @@ export async function POST(
       last_name: body.last_name || null,
       phone: body.phone || null,
       role: body.role,
+      status: 'pending', // User starts as pending until they accept invitation
       clerk_user_id: body.clerk_user_id || null,
     });
+
+    // Automatically send invitation email
+    try {
+      const company = await getCompanyById(id);
+      const currentUser = await getCurrentUser();
+      const inviterName = currentUser
+        ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
+        : undefined;
+
+      if (company) {
+        await sendInvitationEmail({
+          email: user.email,
+          firstName: user.first_name || undefined,
+          lastName: user.last_name || undefined,
+          companyName: company.name,
+          inviterName,
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send invitation email:', emailError);
+      // Don't fail the user creation if email fails
+    }
 
     return NextResponse.json(user, { status: 201 });
   } catch (error) {

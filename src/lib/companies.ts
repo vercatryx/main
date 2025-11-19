@@ -2,53 +2,59 @@
  * Company management functions
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabaseClient } from './supabase';
 import type { Company, CreateCompanyInput, UpdateCompanyInput } from '@/types/company';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 /**
  * Get all companies (super admin only)
  */
 export async function getAllCompanies(): Promise<Company[]> {
-  const { data, error } = await supabase
-    .from('companies')
-    .select('*')
-    .order('name');
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .order('name');
 
-  if (error) {
-    console.error('Error fetching companies:', error);
-    throw new Error('Failed to fetch companies');
+    if (error) {
+      // Silently handle database errors - return empty array if can't connect
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    // Silently handle any connection errors
+    return [];
   }
-
-  return data || [];
 }
 
 /**
  * Get a single company by ID
  */
 export async function getCompanyById(id: string): Promise<Company | null> {
-  const { data, error } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('id', id)
-    .single();
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-  if (error) {
-    console.error('Error fetching company:', error);
+    if (error) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
     return null;
   }
-
-  return data;
 }
 
 /**
  * Create a new company
  */
 export async function createCompany(input: CreateCompanyInput): Promise<Company> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('companies')
     .insert({
@@ -72,6 +78,7 @@ export async function updateCompany(
   id: string,
   input: UpdateCompanyInput
 ): Promise<Company> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('companies')
     .update(input)
@@ -91,6 +98,7 @@ export async function updateCompany(
  * Delete a company (and all associated data via CASCADE)
  */
 export async function deleteCompany(id: string): Promise<void> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('companies')
     .delete()
@@ -106,15 +114,24 @@ export async function deleteCompany(id: string): Promise<void> {
  * Get company statistics
  */
 export async function getCompanyStats(companyId: string) {
-  const [usersCount, projectsCount, meetingsCount] = await Promise.all([
-    supabase.from('users').select('id', { count: 'exact' }).eq('company_id', companyId),
-    supabase.from('projects').select('id', { count: 'exact' }).eq('company_id', companyId),
-    supabase.from('meetings').select('id', { count: 'exact' }).eq('company_id', companyId),
-  ]);
+  try {
+    const supabase = getServerSupabaseClient();
+    const [usersCount, projectsCount, meetingsCount] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact' }).eq('company_id', companyId),
+      supabase.from('projects').select('id', { count: 'exact' }).eq('company_id', companyId),
+      supabase.from('meetings').select('id', { count: 'exact' }).eq('company_id', companyId),
+    ]);
 
-  return {
-    users: usersCount.count || 0,
-    projects: projectsCount.count || 0,
-    meetings: meetingsCount.count || 0,
-  };
+    return {
+      users: usersCount.count || 0,
+      projects: projectsCount.count || 0,
+      meetings: meetingsCount.count || 0,
+    };
+  } catch (error) {
+    return {
+      users: 0,
+      projects: 0,
+      meetings: 0,
+    };
+  }
 }

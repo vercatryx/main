@@ -27,7 +27,8 @@ interface AdminClientNewProps {
   companies: (Company & { stats?: { users: number; projects: number; meetings: number } })[];
   initialUsers: UserWithCompany[];
   initialProjects: { [companyId: string]: Project[] } | Project[];
-  currentUser: User;
+  currentUser: User | null;
+  userEmail: string;
   isSuperAdmin: boolean;
 }
 
@@ -38,6 +39,7 @@ export default function AdminClientNew({
   initialUsers,
   initialProjects,
   currentUser,
+  userEmail,
   isSuperAdmin,
 }: AdminClientNewProps) {
   const [activeTab, setActiveTab] = useState<TabType>(isSuperAdmin ? "companies" : "projects");
@@ -60,7 +62,7 @@ export default function AdminClientNew({
           <div>
             <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
             <p className="text-gray-400">
-              {isSuperAdmin ? "Super Admin" : "Company Admin"} - {currentUser.email}
+              {isSuperAdmin ? "Super Admin" : "Company Admin"} - {userEmail}
             </p>
           </div>
           <SignOutButton>
@@ -141,7 +143,7 @@ export default function AdminClientNew({
             initialProjects={projectsArray}
             companies={companies}
             isSuperAdmin={isSuperAdmin}
-            currentCompanyId={currentUser.company_id}
+            currentCompanyId={currentUser?.company_id || null}
           />
         )}
       </div>

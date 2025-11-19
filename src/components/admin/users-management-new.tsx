@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2 } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2, Send } from "lucide-react";
 import type { User, Company } from "@/types/company";
 
 interface UserWithCompany extends User {
@@ -117,11 +117,14 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
 
     try {
       const res = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "inactive" }),
       });
 
       if (res.ok) {
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: false } : u));
+        const updated = await res.json();
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: updated.status } : u));
       } else {
         alert("Failed to deactivate user");
       }
@@ -133,25 +136,28 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
     }
   };
 
-  const toggleActive = async (userId: string, currentStatus: boolean) => {
+  const sendInvitation = async (userId: string) => {
+    if (!confirm("Send invitation email to this user?")) {
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: !currentStatus }),
+      const res = await fetch(`/api/users/${userId}/invite`, {
+        method: "POST",
       });
 
       if (res.ok) {
-        const updated = await res.json();
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: updated.is_active } : u));
+        const result = await res.json();
+        alert(result.message || "Invitation sent successfully!");
       } else {
-        alert("Failed to update user status");
+        const error = await res.json();
+        alert(error.error || "Failed to send invitation");
       }
     } catch (error) {
-      console.error("Error updating user status:", error);
-      alert("Failed to update user status");
+      console.error("Error sending invitation:", error);
+      alert("Failed to send invitation");
     } finally {
       setLoading(false);
     }
@@ -187,7 +193,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
           </thead>
           <tbody className="divide-y divide-gray-800/50">
             {users.map((user) => (
-              <tr key={user.id} className={`hover:bg-gray-800/30 ${!user.is_active && 'opacity-50'}`}>
+              <tr key={user.id} className={`hover:bg-gray-800/30 ${user.status === 'inactive' && 'opacity-50'}`}>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-gray-400" />
@@ -230,19 +236,31 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleActive(user.id, user.is_active)}
+                  <span
                     className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.is_active
+                      user.status === 'active'
                         ? 'bg-green-900/60 text-green-300'
+                        : user.status === 'pending'
+                        ? 'bg-yellow-900/60 text-yellow-300'
                         : 'bg-red-900/60 text-red-300'
                     }`}
                   >
-                    {user.is_active ? 'Active' : 'Inactive'}
-                  </button>
+                    {user.status === 'active' && '● Active'}
+                    {user.status === 'pending' && '○ Pending'}
+                    {user.status === 'inactive' && '✕ Inactive'}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2 justify-end">
+                    {user.status === 'pending' && (
+                      <button
+                        onClick={() => sendInvitation(user.id)}
+                        className="p-1.5 hover:bg-blue-900/40 rounded transition-colors text-blue-400"
+                        title="Send invitation email"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => openEditModal(user)}
                       className="p-1.5 hover:bg-gray-800/60 rounded transition-colors"
@@ -250,7 +268,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    {user.is_active && (
+                    {user.status !== 'inactive' && (
                       <button
                         onClick={() => handleDelete(user.id)}
                         className="p-1.5 hover:bg-red-900/40 rounded transition-colors text-red-400"

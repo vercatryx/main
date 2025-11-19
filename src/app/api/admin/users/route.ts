@@ -14,6 +14,12 @@ export async function GET() {
       users = await getAllUsers();
     } else {
       // Company admin sees only their company's users
+      if (!currentUser) {
+        return NextResponse.json(
+          { error: 'Unauthorized - user not found' },
+          { status: 403 }
+        );
+      }
       users = await getUsersByCompany(currentUser.company_id);
     }
 

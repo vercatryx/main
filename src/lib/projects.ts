@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getServerSupabaseClient } from './supabase';
 
 export interface Project {
   id: string;
@@ -65,18 +65,22 @@ function projectToRow(project: Partial<Project>): Partial<ProjectRow> {
  * Get all projects for a specific company
  */
 export async function getCompanyProjects(companyId: string): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching company projects:', error);
+    if (error) {
+      return [];
+    }
+
+    return (data || []).map(rowToProject);
+  } catch (error) {
     return [];
   }
-
-  return (data || []).map(rowToProject);
 }
 
 /**
@@ -84,47 +88,55 @@ export async function getCompanyProjects(companyId: string): Promise<Project[]> 
  * @deprecated Use getCompanyProjects instead
  */
 export async function getUserProjects(userId: string): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching user projects:', error);
+    if (error) {
+      return [];
+    }
+
+    return (data || []).map(rowToProject);
+  } catch (error) {
     return [];
   }
-
-  return (data || []).map(rowToProject);
 }
 
 /**
  * Get all users with their projects (for admin)
  */
 export async function getAllUserProjects(): Promise<ProjectStore> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching all projects:', error);
+    if (error) {
+      return {};
+    }
+
+    // Group projects by user ID
+    const projectStore: ProjectStore = {};
+    (data || []).forEach((row) => {
+      const project = rowToProject(row as ProjectRow);
+      if (project.userId) {
+        if (!projectStore[project.userId]) {
+          projectStore[project.userId] = [];
+        }
+        projectStore[project.userId].push(project);
+      }
+    });
+
+    return projectStore;
+  } catch (error) {
     return {};
   }
-
-  // Group projects by user ID
-  const projectStore: ProjectStore = {};
-  (data || []).forEach((row) => {
-    const project = rowToProject(row as ProjectRow);
-    if (project.userId) {
-      if (!projectStore[project.userId]) {
-        projectStore[project.userId] = [];
-      }
-      projectStore[project.userId].push(project);
-    }
-  });
-
-  return projectStore;
 }
 
 /**
@@ -148,6 +160,7 @@ export async function addProject(
 
   const row = projectToRow(newProject);
 
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('projects')
     .insert(row)
@@ -167,13 +180,14 @@ export async function addProject(
  */
 export async function updateProject(
   projectId: string,
-  updates: { title?: string; url?: string; description?: string }
+  updates: { title?: string; url?: string; description?: string; companyId?: string }
 ): Promise<Project | null> {
   const row = projectToRow({
     ...updates,
     updatedAt: new Date().toISOString(),
   });
 
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('projects')
     .update(row)
@@ -193,6 +207,7 @@ export async function updateProject(
  * Delete a project
  */
 export async function deleteProject(projectId: string): Promise<boolean> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('projects')
     .delete()
@@ -210,6 +225,7 @@ export async function deleteProject(projectId: string): Promise<boolean> {
  * Get a single project by ID
  */
 export async function getProjectById(projectId: string): Promise<Project | null> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('projects')
     .select('*')

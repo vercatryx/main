@@ -14,6 +14,12 @@ export async function GET() {
       projects = await getAllUserProjects();
     } else {
       // Company admin sees only their company's projects
+      if (!currentUser) {
+        return NextResponse.json(
+          { error: 'Unauthorized - user not found' },
+          { status: 403 }
+        );
+      }
       const projectsList = await getCompanyProjects(currentUser.company_id);
       // Convert to legacy format for backward compatibility
       projects = { [currentUser.company_id]: projectsList };

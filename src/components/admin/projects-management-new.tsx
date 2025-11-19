@@ -22,7 +22,7 @@ interface ProjectsManagementProps {
   initialProjects: ProjectWithCompany[];
   companies: Company[];
   isSuperAdmin: boolean;
-  currentCompanyId: string;
+  currentCompanyId: string | null;
 }
 
 export default function ProjectsManagementNew({
@@ -39,7 +39,7 @@ export default function ProjectsManagementNew({
     title: "",
     url: "",
     description: "",
-    companyId: currentCompanyId,
+    companyId: currentCompanyId || (companies.length > 0 ? companies[0].id : ""),
   });
 
   const openAddModal = () => {
@@ -48,7 +48,7 @@ export default function ProjectsManagementNew({
       title: "",
       url: "",
       description: "",
-      companyId: currentCompanyId,
+      companyId: currentCompanyId || (companies.length > 0 ? companies[0].id : ""),
     });
     setShowModal(true);
   };

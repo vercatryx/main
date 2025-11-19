@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
-import { SignIn } from "@clerk/nextjs";
+import { SignIn, SignOutButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { getCompanyProjects } from "@/lib/projects";
 import { getCurrentUser, getUserWithCompany } from "@/lib/users";
+import { isSuperAdmin } from "@/lib/permissions";
 import ClientPortal from "./page-client";
 
 export default async function ClientsPage() {
@@ -38,6 +39,12 @@ export default async function ClientsPage() {
     );
   }
 
+  // Check if user is super admin - redirect to admin portal
+  const superAdmin = await isSuperAdmin();
+  if (superAdmin) {
+    redirect("/admin");
+  }
+
   // Get user from database
   const dbUser = await getCurrentUser();
 
@@ -53,6 +60,12 @@ export default async function ClientsPage() {
             <p className="text-lg text-gray-400 mb-8">
               Your account has not been set up yet. Please contact your administrator.
             </p>
+            <SignOutButton>
+              <button className="px-6 py-3 bg-red-700/80 hover:bg-red-600 rounded-lg transition-colors text-white font-medium">
+                Sign Out
+              </button>
+            </SignOutButton>
+
           </div>
         </div>
       </main>
