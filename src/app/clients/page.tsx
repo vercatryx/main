@@ -7,6 +7,7 @@ import { getCurrentUser, getUserWithCompany, getAllUsers } from "@/lib/users";
 import { getAllCompanies } from "@/lib/companies";
 import { isSuperAdmin } from "@/lib/permissions";
 import ClientPortal from "./page-client";
+import AccountSetupChecker from "@/components/account-setup-checker";
 
 export default async function ClientsPage() {
   const clerkUser = await currentUser();
@@ -70,26 +71,13 @@ export default async function ClientsPage() {
   }
 
   if (!dbUser) {
-    // User not in database yet - show error
+    // User not in database yet - check and try to sync
+    const userEmail = clerkUser.emailAddresses[0]?.emailAddress || '';
     return (
-      <main className="min-h-screen bg-gray-950 text-white">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
-              Account Not Set Up
-            </h1>
-            <p className="text-lg text-gray-400 mb-8">
-              Your account has not been set up yet. Please contact your administrator.
-            </p>
-            <SignOutButton redirectUrl="/sign-in">
-              <button className="px-6 py-3 bg-red-700/80 hover:bg-red-600 rounded-lg transition-colors text-white font-medium">
-                Sign Out
-              </button>
-            </SignOutButton>
-
-          </div>
-        </div>
-      </main>
+      <AccountSetupChecker
+        clerkUserId={clerkUser.id}
+        userEmail={userEmail}
+      />
     );
   }
 
