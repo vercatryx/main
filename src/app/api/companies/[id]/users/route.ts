@@ -80,6 +80,7 @@ export async function POST(
           firstName: user.first_name || undefined,
           lastName: user.last_name || undefined,
           companyName: company.name,
+          companyId: company.id,
           inviterName,
         });
       }

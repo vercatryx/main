@@ -18,6 +18,7 @@ interface SendInvitationParams {
   firstName?: string;
   lastName?: string;
   companyName: string;
+  companyId: string;
   inviterName?: string;
 }
 
@@ -54,10 +55,13 @@ export function verifyInvitationToken(token: string): { email: string; companyId
  * Send invitation email to a new user
  */
 export async function sendInvitationEmail(params: SendInvitationParams): Promise<boolean> {
-  const { email, firstName, lastName, companyName, inviterName } = params;
+  const { email, firstName, lastName, companyName, companyId, inviterName } = params;
+
+  // Generate invitation token
+  const token = generateInvitationToken(email, companyId);
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const signupUrl = `${baseUrl}/signup`;
+  const signupUrl = `${baseUrl}/sign-up?invitation=${token}`;
 
   const userName = firstName && lastName
     ? `${firstName} ${lastName}`

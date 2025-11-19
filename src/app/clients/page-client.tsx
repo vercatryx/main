@@ -38,11 +38,21 @@ interface UserWithCompany {
   };
 }
 
+interface Company {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ClientPortalProps {
   userName: string;
   companyName: string;
   projects: Project[];
-  user: UserWithCompany;
+  user: UserWithCompany | null;
+  isSuperAdmin?: boolean;
+  companies?: Company[];
+  users?: UserWithCompany[];
 }
 
 interface ChatAttachment {
@@ -73,28 +83,58 @@ interface Meeting {
   status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
 }
 
-export default function ClientPortal({ projects, userName, companyName, user }: ClientPortalProps) {
+export default function ClientPortal({ projects, userName, companyName, user, isSuperAdmin = false, companies = [], users = [] }: ClientPortalProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
 
-  // Create admin project for company admins
+  // Super admin state for selecting company
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [userProjects, setUserProjects] = useState<Project[]>(projects);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Fetch projects for selected company
+  useEffect(() => {
+    if (!isSuperAdmin || !selectedCompanyId) {
+      setUserProjects(projects);
+      return;
+    }
+
+    const fetchCompanyProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const res = await fetch(`/api/companies/${selectedCompanyId}/projects`);
+        if (res.ok) {
+          const data = await res.json();
+          setUserProjects(data.projects || []);
+        }
+      } catch (error) {
+        console.error('Error fetching company projects:', error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    fetchCompanyProjects();
+  }, [selectedCompanyId, isSuperAdmin, projects]);
+
+  // Create admin project for company admins or super admins
   const adminProject: Project | null = useMemo(() =>
-    user.role === 'admin' ? {
+    (user?.role === 'admin' || isSuperAdmin) ? {
       id: 'admin-dashboard',
       title: 'Admin',
       url: '/admin',
-      description: 'User Management Dashboard',
+      description: isSuperAdmin ? 'Super Admin Dashboard' : 'User Management Dashboard',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } : null,
-    [user.role]
+    [user?.role, isSuperAdmin]
   );
 
-  // For company admins, prepend the admin project to the list
+  // For admins, prepend the admin project to the list
   const currentProjects = adminProject
-    ? [adminProject, ...projects]
-    : projects;
+    ? [adminProject, ...userProjects]
+    : userProjects;
 
   // Helper function to update URL
   const updateURL = useCallback((params: { chat?: string; chatState?: string; userId?: string; project?: string }) => {
@@ -725,7 +765,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {user.role === 'admin' && (
+                  {isAdmin && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -790,7 +830,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                       style={{ maxHeight: '200px' }}
                                     />
                                   </a>
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -816,7 +856,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                   )}
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300"
@@ -838,7 +878,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300 ml-1"
@@ -978,7 +1018,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                 {getProjectForChat()?.title}
               </h3>
               <div className="flex items-center gap-1">
-                {user.role === 'admin' && (
+                {isAdmin && (
                   <button
                     onClick={deleteEntireChat}
                     className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1036,7 +1076,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                       style={{ maxHeight: '300px' }}
                                     />
                                   </a>
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1062,7 +1102,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                   {attachment.duration && (
                                     <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                   )}
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300"
@@ -1084,7 +1124,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                     <span className="flex-1 truncate">{attachment.filename}</span>
                                     <Download className="w-3 h-3" />
                                   </a>
-                                  {user.role === 'admin' && (
+                                  {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                       className="text-red-400 hover:text-red-300 ml-1"
@@ -1240,6 +1280,44 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {/* Super Admin Company Selector */}
+            {isSuperAdmin && (
+              <div className="p-4 border-b border-gray-800/50 bg-gray-900/20 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                    Select Company
+                  </label>
+                  <select
+                    value={selectedCompanyId}
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-100 focus:border-blue-600/50 focus:outline-none transition-colors"
+                  >
+                    <option value="">Select a company...</option>
+                    {Array.from(new Set(users.map(u => u.company_id))).map(companyId => {
+                      const company = users.find(u => u.company_id === companyId)?.company;
+                      return (
+                        <option key={companyId} value={companyId}>
+                          {company?.name || 'Unknown Company'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {loadingProjects && (
+                  <div className="text-xs text-gray-400 text-center py-2">
+                    Loading projects...
+                  </div>
+                )}
+
+                {selectedCompanyId && !loadingProjects && (
+                  <div className="text-xs text-gray-400">
+                    Showing {userProjects.length} project{userProjects.length !== 1 ? 's' : ''} for {users.find(u => u.company_id === selectedCompanyId)?.company.name}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Upcoming Meeting for Users */}
             {upcomingMeeting && (
@@ -1397,7 +1475,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
-                  {user.role === 'admin' && (
+                  {isAdmin && (
                     <button
                       onClick={deleteEntireChat}
                       className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
@@ -1455,7 +1533,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                         style={{ maxHeight: '300px' }}
                                       />
                                     </a>
-                                    {user.role === 'admin' && (
+                                    {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1481,7 +1559,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                     {attachment.duration && (
                                       <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
                                     )}
-                                    {user.role === 'admin' && (
+                                    {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="text-red-400 hover:text-red-300"
@@ -1503,7 +1581,7 @@ export default function ClientPortal({ projects, userName, companyName, user }: 
                                       <span className="flex-1 truncate">{attachment.filename}</span>
                                       <Download className="w-3 h-3" />
                                     </a>
-                                    {user.role === 'admin' && (
+                                    {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
                                         className="text-red-400 hover:text-red-300 ml-1"

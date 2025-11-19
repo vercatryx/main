@@ -3,7 +3,8 @@ import { currentUser } from "@clerk/nextjs/server";
 import { SignIn, SignOutButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { getCompanyProjects } from "@/lib/projects";
-import { getCurrentUser, getUserWithCompany } from "@/lib/users";
+import { getCurrentUser, getUserWithCompany, getAllUsers } from "@/lib/users";
+import { getAllCompanies } from "@/lib/companies";
 import { isSuperAdmin } from "@/lib/permissions";
 import ClientPortal from "./page-client";
 
@@ -39,17 +40,37 @@ export default async function ClientsPage() {
     );
   }
 
-  // Check if user is super admin - redirect to admin portal
+  // Check if user is super admin
   const superAdmin = await isSuperAdmin();
-  if (superAdmin) {
-    redirect("/admin");
-  }
 
-  // Get user from database
+  // Get user from database (will be null for super admins)
   const dbUser = await getCurrentUser();
 
+  // Super admins can access clients page to view all projects
+  if (superAdmin) {
+    const userName = clerkUser.firstName || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
+
+    // Fetch all companies and users for super admin
+    const allCompanies = await getAllCompanies();
+    const allUsers = await getAllUsers();
+
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
+        <ClientPortal
+          projects={[]}
+          userName={userName}
+          companyName="Super Admin"
+          user={null}
+          isSuperAdmin={true}
+          companies={allCompanies}
+          users={allUsers}
+        />
+      </Suspense>
+    );
+  }
+
   if (!dbUser) {
-    // User not in database yet - redirect to admin or show error
+    // User not in database yet - show error
     return (
       <main className="min-h-screen bg-gray-950 text-white">
         <div className="flex items-center justify-center min-h-screen">
@@ -104,6 +125,7 @@ export default async function ClientsPage() {
         userName={userName}
         companyName={userWithCompany.company.name}
         user={userWithCompany}
+        isSuperAdmin={false}
       />
     </Suspense>
   );

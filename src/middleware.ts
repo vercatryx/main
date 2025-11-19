@@ -1,7 +1,16 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const isPublicRoute = createRouteMatcher(["/", "/contact", "/api/availability(.*)", "/api/contact", "/admin/availability(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/contact",
+  "/sign-up(.*)",
+  "/sign-in(.*)",
+  "/api/webhooks/clerk",
+  "/api/availability(.*)",
+  "/api/contact",
+  "/admin/availability(.*)"
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   const url = req.nextUrl;
@@ -21,9 +30,13 @@ export default clerkMiddleware(async (auth, req) => {
     }
   }
 
+  // Allow public routes without protection
   if (!isPublicRoute(req)) {
     await auth.protect();
   }
+
+  // Return without additional protection for public routes
+  return NextResponse.next();
 });
 
 export const config = {

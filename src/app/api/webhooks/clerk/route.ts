@@ -84,12 +84,19 @@ export async function POST(req: NextRequest) {
       const dbUser = await getUserByEmail(email);
 
       if (!dbUser) {
-        console.log(`No database user found for email: ${email}`);
-        // This is okay - user might have signed up directly without invitation
+        console.error(`Unauthorized signup attempt - No invitation found for email: ${email}`);
+        // Reject signups without invitation by returning error
+        // Note: This won't prevent the Clerk account from being created,
+        // but it prevents them from accessing the app
         return NextResponse.json({
-          success: true,
-          message: 'User not found in database (direct signup)'
-        });
+          success: false,
+          message: 'No invitation found for this email address'
+        }, { status: 403 });
+      }
+
+      // Verify user has pending status (invited but not yet activated)
+      if (dbUser.status !== 'pending') {
+        console.log(`User ${email} already activated with status: ${dbUser.status}`);
       }
 
       // Update the database user with Clerk ID and activate them
