@@ -1,34 +1,74 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { themes } from "@/styles/theme";
 
-type Theme = "light" | "dark";
+export type Theme = keyof typeof themes;
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('theme') as Theme | null;
+      if (savedTheme && Object.keys(themes).includes(savedTheme)) {
+        setTheme(savedTheme);
+      }
+      setIsInitialized(true);
+    }
+  }, []);
 
   useEffect(() => {
+    if (!isInitialized) return;
+    
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    console.log('Theme changing to:', theme);
+    
+    // Save theme to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme', theme);
     }
-  }, [theme]);
+    
+    // Remove all theme classes (dark, light)
+    Object.keys(themes).forEach((t) => root.classList.remove(t));
+    
+    // Remove dark class (for Tailwind dark mode)
+    root.classList.remove('dark');
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    // Add current theme class
+    // 'light' theme uses :root styles, so no class needed
+    // Other themes need their class added
+    if (theme !== 'light') {
+      root.classList.add(theme);
+      console.log('Added class:', theme);
+    }
+
+    // Handle Tailwind dark mode
+    // Dark theme needs the 'dark' class for Tailwind's dark: modifier
+    // Light theme should not have the 'dark' class
+    const isDark = theme === 'dark';
+    if (isDark) {
+      root.classList.add('dark');
+      console.log('Added dark class');
+    }
+  }, [theme, isInitialized]);
+
+  const handleSetTheme = (newTheme: Theme) => {
+    console.log('Setting theme to:', newTheme);
+    setTheme(newTheme);
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme: handleSetTheme }}>
       {children}
     </ThemeContext.Provider>
   );

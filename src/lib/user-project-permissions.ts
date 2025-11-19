@@ -142,3 +142,41 @@ export async function hasProjectPermission(userId: string, projectId: string): P
 
   return data !== null;
 }
+
+/**
+ * Get projects a user can access (filtered by permissions)
+ * Returns all company projects if user has all_projects_access or is admin, otherwise only assigned projects
+ */
+export async function getUserAccessibleProjects(userId: string, companyId: string): Promise<string[]> {
+  const supabase = getServerSupabaseClient();
+
+  // Check if user has all_projects_access or is admin
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('all_projects_access, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (userError) {
+    console.error('Error checking user permissions:', userError);
+    return [];
+  }
+
+  // If user has all projects access OR is an admin, return all company project IDs
+  if (userData?.all_projects_access || userData?.role === 'admin') {
+    const { data: projects, error: projectsError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('company_id', companyId);
+
+    if (projectsError) {
+      console.error('Error fetching company projects:', projectsError);
+      return [];
+    }
+
+    return (projects || []).map(p => p.id);
+  }
+
+  // Otherwise, return only assigned projects
+  return getUserProjectPermissions(userId);
+}

@@ -164,11 +164,11 @@ export default function ContactPage() {
   }, [availabilityRequestId, checkingAvailability]);
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
         >
           <ArrowLeft className="w-5 h-5" />
           Back to Home
@@ -176,13 +176,13 @@ export default function ContactPage() {
 
         <div className="mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Get in Touch</h1>
-          <p className="text-xl text-gray-300">
+          <p className="text-xl text-foreground">
             Let's discuss how we can automate your repetitive tasks and save you time.
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-6 mb-6">
+          <div className="bg-red-500/20/20 border border-red-500 rounded-lg p-6 mb-6">
             <p className="text-red-400">{error}</p>
           </div>
         )}
@@ -192,21 +192,19 @@ export default function ContactPage() {
             {submitted ? (
               <>
                 <h2 className="text-2xl font-bold text-green-400 mb-2">Thank You!</h2>
-                <p className="text-gray-300">We've received your message and will get back to you soon.</p>
+                <p className="text-foreground">We've received your message and will get back to you soon.</p>
               </>
             ) : availabilityResult ? (
               <>
                 <h2 className="text-2xl font-bold text-green-400 mb-4">Thank You!</h2>
-                <div className={`p-4 rounded-lg ${
-                  availabilityResult.includes("available now") || availabilityResult.includes("Good news")
+                <div className={`p-4 rounded-lg ${availabilityResult.includes("available now") || availabilityResult.includes("Good news")
                     ? "bg-green-900/20 border border-green-700"
                     : "bg-yellow-900/20 border border-yellow-700"
-                }`}>
-                  <p className={`text-lg ${
-                    availabilityResult.includes("available now") || availabilityResult.includes("Good news")
+                  }`}>
+                  <p className={`text-lg ${availabilityResult.includes("available now") || availabilityResult.includes("Good news")
                       ? "text-green-400"
                       : "text-yellow-400"
-                  }`}>
+                    }`}>
                     {availabilityResult}
                   </p>
                 </div>
@@ -215,13 +213,13 @@ export default function ContactPage() {
               <>
                 <h2 className="text-2xl font-bold text-green-400 mb-4">Checking Availability...</h2>
                 <div className="mb-6">
-                  <div className="w-full bg-gray-700 rounded-full h-2.5 max-w-md mx-auto">
+                  <div className="w-full bg-secondary rounded-full h-2.5 max-w-md mx-auto">
                     <div
-                      className="bg-blue-900 h-2.5 rounded-full transition-all duration-300"
+                      className="bg-brand-blue h-2.5 rounded-full transition-all duration-300"
                       style={{ width: `${availabilityProgress}%` }}
                     ></div>
                   </div>
-                  <p className="text-sm text-gray-400 mt-2">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Let's see if I can find someone... {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')} remaining
                   </p>
                 </div>
@@ -232,7 +230,7 @@ export default function ContactPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
                   Name *
                 </label>
                 <input
@@ -242,13 +240,13 @@ export default function ContactPage() {
                   required
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                   placeholder="Your name"
                 />
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                   Email *
                 </label>
                 <input
@@ -258,7 +256,7 @@ export default function ContactPage() {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                   placeholder="your@email.com"
                 />
               </div>
@@ -266,7 +264,7 @@ export default function ContactPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="company" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="company" className="block text-sm font-medium text-foreground mb-2">
                   Company
                 </label>
                 <input
@@ -275,13 +273,13 @@ export default function ContactPage() {
                   name="company"
                   value={formData.company}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                   placeholder="Your company"
                 />
               </div>
 
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">
                   Phone *
                 </label>
                 <input
@@ -291,7 +289,7 @@ export default function ContactPage() {
                   required
                   value={formData.phone}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                   placeholder="Your phone number"
                 />
               </div>
@@ -299,7 +297,7 @@ export default function ContactPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="preferredContact" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="preferredContact" className="block text-sm font-medium text-foreground mb-2">
                   Preferred Method of Communication *
                 </label>
                 <select
@@ -308,7 +306,7 @@ export default function ContactPage() {
                   required
                   value={formData.preferredContact}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                 >
                   <option value="">Select a method</option>
                   <option value="email">Email</option>
@@ -319,7 +317,7 @@ export default function ContactPage() {
               </div>
 
               <div>
-                <label htmlFor="callbackTime" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="callbackTime" className="block text-sm font-medium text-foreground mb-2">
                   When are you available for a callback?
                 </label>
                 <input
@@ -328,10 +326,10 @@ export default function ContactPage() {
                   name="callbackTime"
                   value={formData.callbackTime}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white"
+                  className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground"
                   placeholder="e.g., Weekdays 2-5 PM, or anytime"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Give us multiple times and we'll try to make it work
                 </p>
               </div>
@@ -340,7 +338,7 @@ export default function ContactPage() {
 
 
             <div>
-              <label htmlFor="message" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">
                 Message
               </label>
               <textarea
@@ -349,7 +347,7 @@ export default function ContactPage() {
                 value={formData.message}
                 onChange={handleChange}
                 rows={6}
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-white resize-none"
+                className="w-full px-4 py-3 bg-card border border-border rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none transition-all text-foreground resize-none"
                 placeholder="Tell us anything else we should know (optional)"
               />
             </div>
@@ -357,17 +355,17 @@ export default function ContactPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full md:w-auto px-10 py-4 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors text-xl font-medium disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="w-full md:w-auto px-10 py-4 bg-brand-blue text-foreground rounded-lg hover:bg-brand-blue-hover transition-colors text-xl font-medium disabled:bg-secondary disabled:cursor-not-allowed"
             >
               {submitting ? 'Sending...' : 'Send Message'}
             </button>
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-medium text-white mb-3">Or</h3>
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h3 className="text-lg font-medium text-foreground mb-3">Or</h3>
               <button
-                  type="button"
-                  onClick={checkAvailability}
-                  disabled={checkingAvailability}
-                  className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:bg-gray-600 disabled:cursor-not-allowed"
+                type="button"
+                onClick={checkAvailability}
+                disabled={checkingAvailability}
+                className="px-6 py-3 bg-brand-blue text-foreground rounded-lg hover:bg-brand-blue-hover transition-colors font-medium disabled:bg-secondary disabled:cursor-not-allowed"
               >
                 See if someone is available to talk now
               </button>

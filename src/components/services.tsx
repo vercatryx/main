@@ -25,13 +25,13 @@ const services = [
 
 export function Services() {
   return (
-    <section id="services" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900 dark:bg-gray-900 transition-colors">
+    <section id="services" className="py-20 px-4 sm:px-6 lg:px-8 bg-secondary transition-colors">
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-white dark:text-white mb-4">
+          <h2 className="text-foreground mb-4">
             Complete Automation Solutions
           </h2>
-          <p className="text-xl text-gray-300 dark:text-gray-300">
+          <p className="text-xl text-muted-foreground">
             From AI agents to CRM platforms, we provide everything you need to automate 
             complex workflows and eliminate manual processes.
           </p>
@@ -41,13 +41,13 @@ export function Services() {
           {services.map((service, index) => (
             <div 
               key={index}
-              className="p-8 bg-black dark:bg-black rounded-2xl hover:shadow-lg hover:shadow-red-900/20 transition-all border border-gray-800 dark:border-gray-800"
+              className="p-8 bg-card rounded-2xl hover:shadow-lg hover:shadow-red-500/20 transition-all border border-border"
             >
-              <div className="w-12 h-12 bg-red-600 dark:bg-red-600 rounded-lg flex items-center justify-center mb-4">
-                <service.icon className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center mb-4">
+                <service.icon className="w-6 h-6 text-foreground" />
               </div>
-              <h3 className="text-white dark:text-white mb-3">{service.title}</h3>
-              <p className="text-gray-300 dark:text-gray-300 leading-relaxed">{service.description}</p>
+              <h3 className="text-foreground mb-3">{service.title}</h3>
+              <p className="text-foreground leading-relaxed">{service.description}</p>
             </div>
           ))}
         </div>

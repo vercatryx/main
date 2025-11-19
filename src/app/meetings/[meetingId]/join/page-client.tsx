@@ -267,10 +267,10 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-4">
           <h1 className="text-3xl font-bold text-red-500">Error</h1>
-          <p className="text-gray-400">{error}</p>
+          <p className="text-muted-foreground">{error}</p>
           <Button onClick={() => router.push('/meetings')} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Meetings
@@ -281,9 +281,9 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
   }
 
   return (
-    <div className="relative h-screen w-full bg-gray-950 flex flex-col">
+    <div className="relative h-screen w-full bg-background flex flex-col">
       {/* Header with Logo and Controls */}
-      <div className="bg-gray-900 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-20">
+      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between z-20">
         {/* Logo and Meeting Title */}
         <div className="flex items-center gap-4">
           <Image
@@ -294,8 +294,8 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
             className="flex-shrink-0"
           />
           <div>
-            <h1 className="text-white font-semibold text-lg">{meeting.title}</h1>
-            <p className="text-gray-400 text-sm">
+            <h1 className="text-foreground font-semibold text-lg">{meeting.title}</h1>
+            <p className="text-muted-foreground text-sm">
               {new Date(meeting.scheduledAt).toLocaleDateString()} at {new Date(meeting.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
@@ -308,7 +308,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
               onClick={handleOpenInviteModal}
               variant="outline"
               size="sm"
-              className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+              className="bg-secondary border-border text-foreground hover:bg-secondary"
             >
               <UserPlus className="mr-2 h-4 w-4" />
               Invite
@@ -318,7 +318,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
             onClick={handleCopyLink}
             variant="outline"
             size="sm"
-            className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+            className="bg-secondary border-border text-foreground hover:bg-secondary"
           >
             {linkCopied ? (
               <>
@@ -344,12 +344,12 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
       </div>
 
       {/* Meeting Container */}
-      <div className="relative flex-1 bg-black border-x border-b border-gray-700">
+      <div className="relative flex-1 bg-background border-x border-b border-border">
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
             <div className="text-center space-y-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-              <p className="text-white text-lg">Joining {meeting.title}...</p>
+              <p className="text-foreground text-lg">Joining {meeting.title}...</p>
             </div>
           </div>
         )}
@@ -359,13 +359,13 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
 
       {/* Invite Modal */}
       {showInviteModal && isSuperuser && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg p-6 max-w-lg w-full border border-gray-700">
+        <div className="fixed inset-0 bg-background/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-lg p-6 max-w-lg w-full border border-border">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-white">Invite Participants</h3>
+              <h3 className="text-xl font-semibold text-foreground">Invite Participants</h3>
               <button
                 onClick={() => setShowInviteModal(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 ✕
               </button>
@@ -377,8 +377,8 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                   onClick={() => setInviteType('users')}
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     inviteType === 'users'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-blue-500 text-foreground'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary'
                   }`}
                 >
                   Users
@@ -387,8 +387,8 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                   onClick={() => setInviteType('companies')}
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     inviteType === 'companies'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-blue-500 text-foreground'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary'
                   }`}
                 >
                   Companies
@@ -400,7 +400,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                   {users.map((user) => (
                     <label
                       key={user.id}
-                      className="flex items-center gap-2 p-2 hover:bg-gray-800 rounded cursor-pointer"
+                      className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -414,7 +414,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                         }}
                         className="w-4 h-4"
                       />
-                      <span className="text-white">
+                      <span className="text-foreground">
                         {user.first_name} {user.last_name} ({user.email})
                       </span>
                     </label>
@@ -425,7 +425,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                   {companies.map((company) => (
                     <label
                       key={company.id}
-                      className="flex items-center gap-2 p-2 hover:bg-gray-800 rounded cursor-pointer"
+                      className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -439,7 +439,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
                         }}
                         className="w-4 h-4"
                       />
-                      <span className="text-white">{company.name}</span>
+                      <span className="text-foreground">{company.name}</span>
                     </label>
                   ))}
                 </div>
@@ -450,14 +450,14 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
               <Button
                 onClick={() => setShowInviteModal(false)}
                 variant="outline"
-                className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                className="bg-secondary border-border text-foreground hover:bg-secondary"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleInvite}
                 disabled={inviting || (inviteType === 'users' && selectedUsers.length === 0) || (inviteType === 'companies' && selectedCompanies.length === 0)}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-500 hover:bg-blue-500 text-foreground"
               >
                 {inviting ? 'Inviting...' : 'Invite'}
               </Button>

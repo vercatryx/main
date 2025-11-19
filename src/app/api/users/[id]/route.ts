@@ -105,8 +105,17 @@ export async function PATCH(
     if (body.status !== undefined) updates.status = body.status;
     if (body.clerk_user_id !== undefined) updates.clerk_user_id = body.clerk_user_id;
     if (body.is_active !== undefined) updates.is_active = body.is_active;
+    if (body.all_projects_access !== undefined) updates.all_projects_access = body.all_projects_access;
 
     const user = await updateUser(id, updates);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(user);
   } catch (error) {
     console.error('Error updating user:', error);

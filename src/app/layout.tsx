@@ -2,6 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/contexts/theme-context";
 import "@/styles/globals.css";
+import { ThemeRegistry } from "@/components/theme-registry";
 
 export const metadata: Metadata = {
   title: "Vercatryx",
@@ -24,6 +25,7 @@ export default function RootLayout({
     >
       <html lang="en" suppressHydrationWarning>
         <body>
+          <ThemeRegistry />
           <ThemeProvider>{children}</ThemeProvider>
         </body>
       </html>

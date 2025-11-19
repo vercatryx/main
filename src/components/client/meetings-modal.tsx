@@ -137,10 +137,10 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
 
   const getStatusBadge = (status: Meeting['status']) => {
     const variants: Record<Meeting['status'], { className: string; label: string }> = {
-      scheduled: { className: "bg-blue-900/60 text-blue-300", label: "Scheduled" },
+      scheduled: { className: "bg-blue-500/60/60 text-blue-400", label: "Scheduled" },
       "in-progress": { className: "bg-green-900/60 text-green-300", label: "In Progress" },
       completed: { className: "bg-gray-700/60 text-gray-300", label: "Completed" },
-      cancelled: { className: "bg-red-900/60 text-red-300", label: "Cancelled" },
+      cancelled: { className: "bg-red-500/60/60 text-red-400", label: "Cancelled" },
     };
 
     const { className, label } = variants[status];
@@ -294,14 +294,14 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="bg-gray-900/95 border-gray-800/50 text-white max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-background border-border/50 text-foreground max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div>
-                <DialogTitle className="text-2xl text-gray-100">
+                <DialogTitle className="text-2xl text-foreground">
                   {isAdmin ? 'Manage Meetings' : 'My Meetings'}
                 </DialogTitle>
-                <DialogDescription className="text-gray-400 mt-1">
+                <DialogDescription className="text-muted-foreground mt-1">
                   Welcome back, {userName}
                 </DialogDescription>
               </div>
@@ -323,15 +323,15 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
             {loading ? (
               <div className="flex items-center justify-center py-24">
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-12 h-12 border-4 border-blue-700/30 border-t-blue-600 rounded-full animate-spin" />
-                  <p className="text-gray-400 text-sm">Loading meetings...</p>
+                  <div className="w-12 h-12 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin" />
+                  <p className="text-muted-foreground text-sm">Loading meetings...</p>
                 </div>
               </div>
             ) : meetings.length === 0 ? (
               <div className="text-center py-12">
-                <Video className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-4 text-lg font-medium text-gray-300">No upcoming meetings</h3>
-                <p className="mt-2 text-gray-400">
+                <Video className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-medium text-foreground">No upcoming meetings</h3>
+                <p className="mt-2 text-muted-foreground">
                   You don't have any meetings scheduled at the moment.
                 </p>
                 {isAdmin && (
@@ -344,31 +344,31 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
             ) : (
               <div className="grid gap-6 md:grid-cols-2">
                 {meetings.map((meeting) => (
-                  <Card key={meeting.id} className="bg-gray-900/80 border-gray-800/50">
+                  <Card key={meeting.id} className="bg-card/80 border-border/50">
                     <CardHeader>
                       <div className="flex items-start justify-between">
-                        <CardTitle className="text-lg text-gray-100">{meeting.title}</CardTitle>
+                        <CardTitle className="text-lg text-foreground">{meeting.title}</CardTitle>
                         {getStatusBadge(meeting.status)}
                       </div>
                       {meeting.description && (
-                        <CardDescription className="text-gray-400 text-sm">
+                        <CardDescription className="text-muted-foreground text-sm">
                           {meeting.description}
                         </CardDescription>
                       )}
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-300">
-                        <Calendar className="h-4 w-4 text-gray-400" />
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span>{formatDate(meeting.scheduledAt)}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-300">
-                        <Clock className="h-4 w-4 text-gray-400" />
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
                         <span>
                           {formatTime(meeting.scheduledAt)} ({meeting.duration} min)
                         </span>
                       </div>
-                      <div className="flex items-start gap-2 text-sm text-gray-300">
-                        <Users className="h-4 w-4 text-gray-400 mt-0.5" />
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div className="flex-1">
                           {meeting.accessType === 'public' ? (
                             <Badge className="bg-green-900/60 text-green-300">Public - Anyone with link</Badge>
@@ -377,7 +377,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           ) : getParticipantNames(meeting).length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {getParticipantNames(meeting).map((name, idx) => (
-                                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-800/60 text-gray-300">
+                                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground">
                                   {name}
                                 </span>
                               ))}
@@ -389,11 +389,11 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                       </div>
                       {meeting.accessType === 'public' && (
                         <div className="flex items-center gap-2 text-sm">
-                          <Link2 className="h-4 w-4 text-gray-400" />
+                          <Link2 className="h-4 w-4 text-muted-foreground" />
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-auto p-0 text-blue-400 hover:text-blue-300 hover:bg-transparent"
+                            className="h-auto p-0 text-brand-blue hover:text-brand-blue-hover hover:bg-transparent"
                             onClick={() => {
                               const url = `${window.location.origin}/meetings/${meeting.id}/join`;
                               navigator.clipboard.writeText(url);
@@ -414,7 +414,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           rel="noopener noreferrer"
                           className={isAdmin ? "flex-1" : "w-full"}
                         >
-                          <Button className="w-full bg-blue-700/80 hover:bg-blue-600" size="sm">
+                          <Button className="w-full bg-brand-blue hover:bg-brand-blue-hover text-white" size="sm">
                             <Video className="mr-2 h-4 w-4" />
                             Join Meeting
                           </Button>
@@ -429,7 +429,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           variant="destructive"
                           size="sm"
                           onClick={() => handleDeleteMeeting(meeting.id)}
-                          className="bg-red-700/80 hover:bg-red-600"
+                          className="bg-red-500/80 hover:bg-red-500"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -446,62 +446,62 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       {/* Create Meeting Dialog */}
       {isAdmin && users && (
         <Dialog open={showCreateModal} onOpenChange={closeCreateModal}>
-          <DialogContent className="bg-gray-900/95 border-gray-800/50 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-background/95 border-border/50 text-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-gray-100">Create New Meeting</DialogTitle>
-              <DialogDescription className="text-gray-400">
+              <DialogTitle className="text-foreground">Create New Meeting</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
                 Schedule a meeting with one or more users
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleCreateMeeting} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="title" className="text-gray-200">Meeting Title</Label>
+                <Label htmlFor="title" className="text-foreground">Meeting Title</Label>
                 <Input
                   id="title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Team Sync"
                   required
-                  className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100 placeholder-gray-500"
+                  className="bg-secondary/50 border-border/50 focus:border-brand-blue/50 text-foreground placeholder-muted-foreground"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-gray-200">Description (Optional)</Label>
+                <Label htmlFor="description" className="text-foreground">Description (Optional)</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Discuss project progress and next steps"
                   rows={3}
-                  className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100 placeholder-gray-500"
+                  className="bg-secondary/50 border-border/50 focus:border-brand-blue/50 text-foreground placeholder-muted-foreground"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="scheduledAt" className="text-gray-200">Date & Time</Label>
+                  <Label htmlFor="scheduledAt" className="text-foreground">Date & Time</Label>
                   <Input
                     id="scheduledAt"
                     type="datetime-local"
                     value={formData.scheduledAt}
                     onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
                     required
-                    className="bg-gray-800/80 border-gray-700/50 focus:border-blue-600/50 text-gray-100"
+                    className="bg-secondary/50 border-border/50 focus:border-brand-blue/50 text-foreground"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-gray-200">Duration (minutes)</Label>
+                  <Label htmlFor="duration" className="text-foreground">Duration (minutes)</Label>
                   <Select
                     value={formData.duration}
                     onValueChange={(value) => setFormData({ ...formData, duration: value })}
                   >
-                    <SelectTrigger className="bg-gray-800/80 border-gray-700/50 text-gray-100">
+                    <SelectTrigger className="bg-secondary/50 border-border/50 text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800/90 border-gray-700/50 text-white">
+                    <SelectContent className="bg-popover border-border text-popover-foreground">
                       <SelectItem value="15">15 minutes</SelectItem>
                       <SelectItem value="30">30 minutes</SelectItem>
                       <SelectItem value="45">45 minutes</SelectItem>
@@ -514,15 +514,15 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
               </div>
 
               <div className="space-y-2">
-                <Label className="text-gray-200">Access Type</Label>
+                <Label className="text-foreground">Access Type</Label>
                 <Select
                   value={formData.accessType}
                   onValueChange={(value: "users" | "company" | "public") => setFormData({ ...formData, accessType: value })}
                 >
-                  <SelectTrigger className="bg-gray-800/80 border-gray-700/50 text-gray-100">
+                  <SelectTrigger className="bg-secondary/50 border-border/50 text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800/90 border-gray-700/50 text-white">
+                  <SelectContent className="bg-popover border-border text-popover-foreground">
                     <SelectItem value="users">Specific Users</SelectItem>
                     <SelectItem value="company">Entire Company</SelectItem>
                     <SelectItem value="public">Public (Anyone with link)</SelectItem>
@@ -532,8 +532,8 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
 
               {formData.accessType === 'users' && users && (
                 <div className="space-y-2">
-                  <Label className="text-gray-200">Select Users ({formData.participantUserIds.length} selected)</Label>
-                  <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
+                  <Label className="text-foreground">Select Users ({formData.participantUserIds.length} selected)</Label>
+                  <div className="border border-border/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-secondary/30">
                     {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
                       <div key={user.id} className="flex items-center space-x-2">
                         <Checkbox
@@ -555,8 +555,8 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
 
               {formData.accessType === 'company' && companies && (
                 <div className="space-y-2">
-                  <Label className="text-gray-200">Select Companies ({formData.participantCompanyIds.length} selected)</Label>
-                  <div className="border border-gray-700/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800/70">
+                  <Label className="text-foreground">Select Companies ({formData.participantCompanyIds.length} selected)</Label>
+                  <div className="border border-border/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-secondary/30">
                     {companies.map((company) => (
                       <div key={company.id} className="flex items-center space-x-2">
                         <Checkbox
@@ -577,8 +577,8 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
               )}
 
               {formData.accessType === 'public' && (
-                <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4">
-                  <p className="text-sm text-blue-300">
+                <div className="bg-brand-blue/10 border border-brand-blue/20 rounded-lg p-4">
+                  <p className="text-sm text-brand-blue">
                     <strong>Public Meeting:</strong> Anyone with the meeting link will be able to join. The link will be provided after creation.
                   </p>
                 </div>
@@ -594,15 +594,16 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                     (formData.accessType === 'users' && formData.participantUserIds.length === 0) ||
                     (formData.accessType === 'company' && formData.participantCompanyIds.length === 0)
                   }
-                  className="bg-blue-700/80 hover:bg-blue-600"
+                  className="bg-brand-blue hover:bg-brand-blue-hover text-white"
                 >
                   Create Meeting
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
-      )}
+        </Dialog >
+      )
+      }
     </>
   );
 }

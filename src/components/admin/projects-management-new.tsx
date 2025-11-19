@@ -150,7 +150,7 @@ export default function ProjectsManagementNew({
         {isSuperAdmin && (
           <button
             onClick={openAddModal}
-            className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add Project
@@ -162,7 +162,7 @@ export default function ProjectsManagementNew({
         {projects.map((project) => (
           <div
             key={project.id}
-            className="bg-gray-900/80 rounded-lg p-6 border border-gray-800/50 hover:border-gray-700/50 transition-colors flex flex-col"
+            className="bg-card/80 rounded-lg p-6 border border-border/50 hover:border-border/50 transition-colors flex flex-col"
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -173,14 +173,14 @@ export default function ProjectsManagementNew({
                 <div className="flex gap-2">
                   <button
                     onClick={() => openEditModal(project)}
-                    className="p-1.5 hover:bg-gray-800/60 rounded transition-colors"
+                    className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
                     title="Edit project"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(project.id)}
-                    className="p-1.5 hover:bg-red-900/40 rounded transition-colors text-red-400"
+                    className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
                     title="Delete project"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -190,7 +190,7 @@ export default function ProjectsManagementNew({
             </div>
 
             {project.description && (
-              <p className="text-sm text-gray-400 mb-4 line-clamp-2">{project.description}</p>
+              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
             )}
 
             <div className="mt-auto space-y-3">
@@ -205,14 +205,14 @@ export default function ProjectsManagementNew({
               </a>
 
               {isSuperAdmin && project.company && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Building2 className="w-4 h-4" />
                   {project.company.name}
                 </div>
               )}
 
-              <div className="pt-3 border-t border-gray-800/50">
-                <p className="text-xs text-gray-500">
+              <div className="pt-3 border-t border-border/50">
+                <p className="text-xs text-muted-foreground">
                   Created {new Date(project.createdAt).toLocaleDateString()}
                 </p>
               </div>
@@ -222,7 +222,7 @@ export default function ProjectsManagementNew({
       </div>
 
       {projects.length === 0 && (
-        <div className="text-center py-12 text-gray-400 bg-gray-900/80 rounded-lg border border-gray-800/50">
+        <div className="text-center py-12 text-muted-foreground bg-card/80 rounded-lg border border-border/50">
           <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>No projects found. Click "Add Project" to create one.</p>
         </div>
@@ -230,15 +230,15 @@ export default function ProjectsManagementNew({
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900/95 rounded-lg p-6 max-w-lg w-full border border-gray-800/50">
+        <div className="fixed inset-0 bg-background/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-card/95 rounded-lg p-6 max-w-lg w-full border border-border/50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">
                 {editingProject ? "Edit Project" : "Add Project"}
               </h3>
               <button
                 onClick={closeModal}
-                className="p-1 hover:bg-gray-800/60 rounded transition-colors"
+                className="p-1 hover:bg-secondary/60 rounded transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -246,49 +246,49 @@ export default function ProjectsManagementNew({
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Project Title *</label>
+                <label className="block mb-2 font-medium text-foreground">Project Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                   placeholder="Website Redesign"
                 />
               </div>
 
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Project URL *</label>
+                <label className="block mb-2 font-medium text-foreground">Project URL *</label>
                 <input
                   type="url"
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   required
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                   placeholder="https://example.com"
                 />
               </div>
 
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Description</label>
+                <label className="block mb-2 font-medium text-foreground">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors resize-none"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors resize-none"
                   placeholder="Project description..."
                 />
               </div>
 
               {isSuperAdmin && (
                 <div>
-                  <label className="block mb-2 font-medium text-gray-200">Company *</label>
+                  <label className="block mb-2 font-medium text-foreground">Company *</label>
                   <select
                     value={formData.companyId}
                     onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
                     required
                     disabled={!isSuperAdmin}
-                    className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">Select company...</option>
                     {companies.map((company) => (
@@ -304,14 +304,14 @@ export default function ProjectsManagementNew({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors disabled:bg-gray-700/50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors disabled:bg-secondary/50 disabled:cursor-not-allowed"
                   disabled={loading}
                 >
                   {loading ? "Saving..." : editingProject ? "Update" : "Create"}

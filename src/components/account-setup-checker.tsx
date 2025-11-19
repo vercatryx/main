@@ -55,20 +55,17 @@ export default function AccountSetupChecker({ clerkUserId, userEmail }: AccountS
 
   if (checking) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white">
+      <main className="min-h-screen bg-background text-foreground">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <LogoWineFill
               width={300}
               duration={10}
-              color="#ff0000"
-              baseColor="#555555"
-              outlineColor="#ffffff"
             />
-            <h1 className="text-3xl font-bold mb-4 text-gray-100 mt-6">
+            <h1 className="text-3xl font-bold mb-4 text-foreground mt-6">
               Setting Up Your Account...
             </h1>
-            <p className="text-lg text-gray-400">
+            <p className="text-lg text-muted-foreground">
               Please wait while we verify your account.
             </p>
           </div>
@@ -78,17 +75,17 @@ export default function AccountSetupChecker({ clerkUserId, userEmail }: AccountS
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center max-w-md">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
             Account Not Set Up
           </h1>
-          <p className="text-lg text-gray-400 mb-8">
+          <p className="text-lg text-muted-foreground mb-8">
             {error || 'Your account has not been set up yet. Please contact your administrator.'}
           </p>
           <SignOutButton redirectUrl="/sign-in">
-            <button className="px-6 py-3 bg-red-700/80 hover:bg-red-600 rounded-lg transition-colors text-white font-medium">
+            <button className="px-6 py-3 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors text-foreground font-medium">
               Sign Out
             </button>
           </SignOutButton>

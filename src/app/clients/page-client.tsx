@@ -1,13 +1,17 @@
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Send, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Square, Video, Calendar, ExternalLink } from "lucide-react";
+import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Video, Plus, MoreVertical, FileText, Play, Pause, Sun, Moon, Laptop, Square, Send, Calendar, ExternalLink } from "lucide-react";
+import { useTheme } from "@/contexts/theme-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import MeetingsModal from "@/components/client/meetings-modal";
@@ -54,6 +58,7 @@ interface ClientPortalProps {
   isSuperAdmin?: boolean;
   companies?: Company[];
   users?: UserWithCompany[];
+  hasNoProjects?: boolean;
 }
 
 interface ChatAttachment {
@@ -84,10 +89,11 @@ interface Meeting {
   status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
 }
 
-export default function ClientPortal({ projects, userName, companyName, user, isSuperAdmin = false, companies = [], users = [] }: ClientPortalProps) {
+export default function ClientPortal({ projects, userName, companyName, user, isSuperAdmin = false, companies = [], users = [], hasNoProjects = false }: ClientPortalProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
+  const { setTheme, theme } = useTheme();
 
   // Super admin state for selecting company
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -194,6 +200,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showMeetingsModal, setShowMeetingsModal] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -261,30 +268,30 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
   // Fetch upcoming meeting
   useEffect(() => {
-      const fetchUpcomingMeeting = async () => {
-        try {
-          const res = await fetch('/api/meetings/upcoming');
-          if (res.ok) {
-            const data = await res.json();
-            // Get the first meeting that's within 3 hours
-            const now = new Date();
-            const upcomingMeetings = data.meetings.filter((meeting: Meeting) => {
-              const scheduledDate = new Date(meeting.scheduledAt);
-              const joinWindowStart = new Date(scheduledDate.getTime() - 30 * 60 * 1000); // 30 min before
-              const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after
-              return now >= joinWindowStart && now <= joinWindowEnd;
-            });
-            setUpcomingMeeting(upcomingMeetings[0] || null);
-          }
-        } catch (error) {
-          console.error('Error fetching upcoming meeting:', error);
+    const fetchUpcomingMeeting = async () => {
+      try {
+        const res = await fetch('/api/meetings/upcoming');
+        if (res.ok) {
+          const data = await res.json();
+          // Get the first meeting that's within 3 hours
+          const now = new Date();
+          const upcomingMeetings = data.meetings.filter((meeting: Meeting) => {
+            const scheduledDate = new Date(meeting.scheduledAt);
+            const joinWindowStart = new Date(scheduledDate.getTime() - 30 * 60 * 1000); // 30 min before
+            const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after
+            return now >= joinWindowStart && now <= joinWindowEnd;
+          });
+          setUpcomingMeeting(upcomingMeetings[0] || null);
         }
-      };
+      } catch (error) {
+        console.error('Error fetching upcoming meeting:', error);
+      }
+    };
 
-      fetchUpcomingMeeting();
-      // Refresh every minute
-      const interval = setInterval(fetchUpcomingMeeting, 60000);
-      return () => clearInterval(interval);
+    fetchUpcomingMeeting();
+    // Refresh every minute
+    const interval = setInterval(fetchUpcomingMeeting, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -307,15 +314,22 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   useEffect(() => {
     if (chatProjectId) {
       const fetchMessages = async () => {
-        const res = await fetch(`/api/chat/${chatProjectId}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          },
-        });
-        const data = await res.json();
-        setMessages(data);
+        setIsLoadingMessages(true);
+        try {
+          const res = await fetch(`/api/chat/${chatProjectId}`, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            },
+          });
+          const data = await res.json();
+          setMessages(data);
+        } catch (error) {
+          console.error('Error fetching messages:', error);
+        } finally {
+          setIsLoadingMessages(false);
+        }
       };
 
       // Initial fetch
@@ -406,10 +420,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   // Only show "no projects" message for regular users (admins always have the Admin project)
   if (currentProjects.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white">
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
         <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-4 text-gray-100">No Projects Yet</h2>
-          <p className="text-gray-400">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">No Projects Yet</h2>
+          <p className="text-muted-foreground">
             Your admin will add projects for you soon!
           </p>
         </div>
@@ -750,26 +764,25 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   };
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Sidebar - full width on mobile, toggleable on desktop */}
       <div
-        className={`${
-          isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
-        } bg-gray-950 border-r border-gray-800/50 transition-all duration-300 overflow-hidden flex flex-col`}
+        className={`${isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
+          } bg-background border-r border-border transition-all duration-300 overflow-hidden flex flex-col`}
       >
         {chatState === 'sidebar' ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-800/50 bg-gray-900/60">
+            <div className="p-4 border-b border-border bg-card/60">
               <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-lg text-gray-100">
+                <h3 className="font-bold text-lg text-foreground">
                   {getProjectForChat()?.title}
                 </h3>
                 <div className="flex items-center gap-1">
                   {isSuperAdmin && (
                     <button
                       onClick={deleteEntireChat}
-                      className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
+                      className="p-2 hover:bg-red-500/20/40 rounded-lg text-red-400 transition-colors"
                       title="Delete entire chat"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -777,21 +790,21 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   )}
                   <button
                     onClick={() => setChatState('expanded')}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                    className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                     title="Expand chat"
                   >
                     <Maximize2 className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setChatState('closed')}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                    className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                     title="Close chat"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {getProjectForChat()?.description}
               </p>
             </div>
@@ -801,22 +814,20 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex flex-col ${
-                      msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                    }`}
+                    className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                      }`}
                   >
-                    <p className="text-xs text-gray-400 mb-1 px-1">
+                    <p className="text-xs text-muted-foreground mb-1 px-1">
                       {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                     </p>
                     <div
-                      className={`rounded-lg px-3 py-2 max-w-xs ${
-                        msg.userId === clerkUser?.id
-                          ? 'bg-red-700/80 text-white'
-                          : 'bg-gray-800/60 text-gray-200'
-                      }`}
+                      className={`rounded-lg px-3 py-2 max-w-xs ${msg.userId === clerkUser?.id
+                        ? 'bg-brand-blue text-white'
+                        : 'bg-muted border border-border text-foreground'
+                        }`}
                     >
                       {msg.message && msg.message.trim() && (
-                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
+                        <p className={msg.message.includes('was deleted') ? 'italic text-muted-foreground' : ''}>
                           {msg.message}
                         </p>
                       )}
@@ -830,14 +841,14 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     <img
                                       src={attachment.url}
                                       alt={attachment.filename}
-                                      className="max-w-full rounded border border-gray-600"
+                                      className="max-w-full rounded border border-border"
                                       style={{ maxHeight: '200px' }}
                                     />
                                   </a>
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-500 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                       title="Delete attachment"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -858,12 +869,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     Your browser does not support audio playback.
                                   </audio>
                                   {attachment.duration && (
-                                    <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                    <span className="text-xs text-muted-foreground">{formatTime(attachment.duration)}</span>
                                   )}
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="text-red-400 hover:text-red-300"
+                                      className="text-red-400 hover:text-red-400"
                                       title="Delete voice note"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -871,12 +882,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                   )}
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                <div className="flex items-center gap-2 bg-muted rounded px-2 py-1 text-xs">
                                   <a
                                     href={attachment.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                    className="flex items-center gap-2 flex-1 hover:text-foreground"
                                   >
                                     <FileIcon className="w-4 h-4" />
                                     <span className="flex-1 truncate">{attachment.filename}</span>
@@ -885,7 +896,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="text-red-400 hover:text-red-300 ml-1"
+                                      className="text-red-400 hover:text-red-400 ml-1"
                                       title="Delete attachment"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -906,21 +917,21 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               </div>
             </div>
             {/* Chat Input */}
-            <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
+            <div className="p-4 border-t border-border bg-card/40">
               {selectedFiles.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
+                    <div key={index} className="flex items-center gap-2 bg-secondary/70 rounded px-2 py-1 text-xs">
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
                         <FileIcon className="w-3 h-3" />
                       )}
                       <span className="flex-1 truncate">{file.name}</span>
-                      <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                      <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
                       <button
                         onClick={() => removeFile(index)}
-                        className="text-red-400 hover:text-red-300"
+                        className="text-red-400 hover:text-red-400"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -929,31 +940,31 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 </div>
               )}
               {audioBlob && (
-                <div className="mb-2 bg-gray-800/70 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-secondary/70 rounded px-3 py-2 flex items-center gap-2">
                   <Mic className="w-4 h-4 text-blue-400" />
                   <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
                   <button
                     onClick={sendVoiceNote}
-                    className="bg-blue-700/80 hover:bg-blue-600 rounded px-3 py-1 text-xs transition-colors"
+                    className="bg-blue-500/80 hover:bg-blue-500 rounded px-3 py-1 text-xs transition-colors"
                     disabled={uploadingFiles}
                   >
                     Send
                   </button>
                   <button
                     onClick={cancelRecording}
-                    className="text-red-400 hover:text-red-300 transition-colors"
+                    className="text-red-400 hover:text-red-400 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
               {isRecording && (
-                <div className="mb-2 bg-red-950/40 border border-red-700/50 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-red-500/20/40 border border-red-500/50 rounded px-3 py-2 flex items-center gap-2">
                   <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                   <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
                   <button
                     onClick={stopRecording}
-                    className="bg-red-700/80 hover:bg-red-600 rounded-lg p-2 transition-colors"
+                    className="bg-red-500/80 hover:bg-red-500 rounded-lg p-2 transition-colors"
                   >
                     <Square className="w-4 h-4" />
                   </button>
@@ -971,7 +982,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-gray-800/80 hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                  className="bg-secondary/80 hover:bg-secondary rounded-lg p-2 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
@@ -979,9 +990,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`${
-                    isRecording ? 'bg-red-700/80 hover:bg-red-600' : 'bg-gray-800/80 hover:bg-gray-700'
-                  } rounded-lg p-2 transition-colors`}
+                  className={`${isRecording ? 'bg-red-500/80 hover:bg-red-500' : 'bg-secondary/80 hover:bg-secondary'
+                    } rounded-lg p-2 transition-colors`}
                   disabled={uploadingFiles || audioBlob !== null}
                 >
                   <Mic className="w-5 h-5" />
@@ -989,7 +999,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <input
                   ref={messageInputRef}
                   name="message"
-                  className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 placeholder-gray-500 focus:border-blue-600/50 focus:bg-gray-800 outline-none transition-colors"
+                  className="w-full bg-secondary/80 border border-border/50 rounded-lg px-3 py-2 text-foreground placeholder-muted-foreground focus:border-blue-600/50 focus:bg-secondary outline-none transition-colors"
                   placeholder="Type a message..."
                   disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
@@ -1001,7 +1011,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 />
                 <button
                   type="submit"
-                  className="bg-blue-700/80 hover:bg-blue-600 rounded-lg p-2 disabled:opacity-50 transition-colors"
+                  className="bg-blue-500/80 hover:bg-blue-500 rounded-lg p-2 disabled:opacity-50 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
@@ -1016,8 +1026,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
           </>
         ) : chatState === 'expanded' && isMobile ? (
           /* Mobile Expanded Chat - takes over entire screen */
-          <div className="w-full h-full bg-gray-900 flex flex-col">
-            <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/60">
+          <div className="w-full h-full bg-card flex flex-col">
+            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/60">
               <h3 className="font-bold">
                 {getProjectForChat()?.title}
               </h3>
@@ -1025,7 +1035,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 {isSuperAdmin && (
                   <button
                     onClick={deleteEntireChat}
-                    className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
+                    className="p-2 hover:bg-red-500/20/40 rounded-lg text-red-400 transition-colors"
                     title="Delete entire chat"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1033,39 +1043,37 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 )}
                 <button
                   onClick={() => setChatState('sidebar')}
-                  className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                  className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                 >
                   <Minimize2 className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setChatState('closed')}
-                  className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                  className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
-            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-gray-950/50">
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
               <div className="space-y-4">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex flex-col ${
-                      msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                    }`}
+                    className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                      }`}
                   >
-                    <p className="text-xs text-gray-400 mb-1 px-1">
+                    <p className="text-xs text-muted-foreground mb-1 px-1">
                       {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                     </p>
                     <div
-                      className={`rounded-lg px-3 py-2 max-w-md ${
-                        msg.userId === clerkUser?.id
-                          ? 'bg-red-700/80 text-white'
-                          : 'bg-gray-800/70 text-gray-200'
-                      }`}
+                      className={`rounded-lg px-3 py-2 max-w-md ${msg.userId === clerkUser?.id
+                        ? 'bg-brand-blue text-white'
+                        : 'bg-muted border border-border text-foreground'
+                        }`}
                     >
                       {msg.message && msg.message.trim() && (
-                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
+                        <p className={msg.message.includes('was deleted') ? 'italic text-muted-foreground' : ''}>
                           {msg.message}
                         </p>
                       )}
@@ -1079,14 +1087,14 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     <img
                                       src={attachment.url}
                                       alt={attachment.filename}
-                                      className="max-w-full rounded border border-gray-600"
+                                      className="max-w-full rounded border border-border"
                                       style={{ maxHeight: '300px' }}
                                     />
                                   </a>
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-500 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                       title="Delete attachment"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -1107,12 +1115,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     Your browser does not support audio playback.
                                   </audio>
                                   {attachment.duration && (
-                                    <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                    <span className="text-xs text-muted-foreground">{formatTime(attachment.duration)}</span>
                                   )}
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="text-red-400 hover:text-red-300"
+                                      className="text-red-400 hover:text-red-400"
                                       title="Delete voice note"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -1120,12 +1128,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                   )}
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                <div className="flex items-center gap-2 bg-muted rounded px-2 py-1 text-xs">
                                   <a
                                     href={attachment.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                    className="flex items-center gap-2 flex-1 hover:text-foreground"
                                   >
                                     <FileIcon className="w-4 h-4" />
                                     <span className="flex-1 truncate">{attachment.filename}</span>
@@ -1134,7 +1142,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                   {isAdmin && (
                                     <button
                                       onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                      className="text-red-400 hover:text-red-300 ml-1"
+                                      className="text-red-400 hover:text-red-400 ml-1"
                                       title="Delete attachment"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -1154,21 +1162,21 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 ))}
               </div>
             </div>
-            <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
+            <div className="p-4 border-t border-border/50 bg-card/40">
               {selectedFiles.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
+                    <div key={index} className="flex items-center gap-2 bg-secondary/70 rounded px-2 py-1 text-xs">
                       {file.type.startsWith('image/') ? (
                         <ImageIcon className="w-3 h-3" />
                       ) : (
                         <FileIcon className="w-3 h-3" />
                       )}
                       <span className="flex-1 truncate">{file.name}</span>
-                      <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                      <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
                       <button
                         onClick={() => removeFile(index)}
-                        className="text-red-400 hover:text-red-300"
+                        className="text-red-400 hover:text-red-400"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1177,31 +1185,31 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 </div>
               )}
               {audioBlob && (
-                <div className="mb-2 bg-gray-800/70 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-secondary/70 rounded px-3 py-2 flex items-center gap-2">
                   <Mic className="w-4 h-4 text-blue-400" />
                   <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
                   <button
                     onClick={sendVoiceNote}
-                    className="bg-blue-700/80 hover:bg-blue-600 rounded px-3 py-1 text-xs transition-colors"
+                    className="bg-blue-500/80 hover:bg-blue-500 rounded px-3 py-1 text-xs transition-colors"
                     disabled={uploadingFiles}
                   >
                     Send
                   </button>
                   <button
                     onClick={cancelRecording}
-                    className="text-red-400 hover:text-red-300 transition-colors"
+                    className="text-red-400 hover:text-red-400 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
               {isRecording && (
-                <div className="mb-2 bg-red-950/40 border border-red-700/50 rounded px-3 py-2 flex items-center gap-2">
+                <div className="mb-2 bg-red-500/20/40 border border-red-500/50 rounded px-3 py-2 flex items-center gap-2">
                   <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                   <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
                   <button
                     onClick={stopRecording}
-                    className="bg-red-700/80 hover:bg-red-600 rounded-lg p-2 transition-colors"
+                    className="bg-red-500/80 hover:bg-red-500 rounded-lg p-2 transition-colors"
                   >
                     <Square className="w-4 h-4" />
                   </button>
@@ -1219,7 +1227,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-gray-800/80 hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                  className="bg-secondary/80 hover:bg-secondary rounded-lg p-2 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
@@ -1227,9 +1235,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`${
-                    isRecording ? 'bg-red-700/80 hover:bg-red-600' : 'bg-gray-800/80 hover:bg-gray-700'
-                  } rounded-lg p-2 transition-colors`}
+                  className={`${isRecording ? 'bg-red-500/80 hover:bg-red-500' : 'bg-secondary/80 hover:bg-secondary'
+                    } rounded-lg p-2 transition-colors`}
                   disabled={uploadingFiles || audioBlob !== null}
                 >
                   <Mic className="w-5 h-5" />
@@ -1237,7 +1244,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 <input
                   ref={messageInputRef}
                   name="message"
-                  className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-100 placeholder-gray-500 focus:border-blue-600/50 focus:bg-gray-800 outline-none transition-colors"
+                  className="w-full bg-secondary/80 border border-border/50 rounded-lg px-3 py-2 text-foreground placeholder-muted-foreground focus:border-blue-600/50 focus:bg-secondary outline-none transition-colors"
                   placeholder="Type a message..."
                   disabled={uploadingFiles || isRecording}
                   onKeyDown={(e) => {
@@ -1249,7 +1256,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 />
                 <button
                   type="submit"
-                  className="bg-blue-700/80 hover:bg-blue-600 rounded-lg p-2 disabled:opacity-50 transition-colors"
+                  className="bg-blue-500/80 hover:bg-blue-500 rounded-lg p-2 disabled:opacity-50 transition-colors"
                   disabled={uploadingFiles || isRecording}
                 >
                   {uploadingFiles ? (
@@ -1264,22 +1271,34 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         ) : (
           <>
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/40">
+            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/40">
               <div>
-                <h2 className="text-xl font-bold mb-1 text-gray-100">{companyName}</h2>
-                <p className="text-sm text-gray-400">
+                <h2 className="text-xl font-bold mb-1 text-foreground">{companyName}</h2>
+                <p className="text-sm text-muted-foreground">
                   Welcome, {userName}!
                 </p>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="p-2 hover:bg-gray-800/60 rounded-full transition-colors">
+                  <button className="p-2 hover:bg-secondary/60 rounded-full transition-colors">
                     <UserCircle className="w-6 h-6" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer">
+                    <Sun className="w-4 h-4 mr-2" />
+                    Light
+                    {theme === 'light' && <span className="ml-auto text-xs">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer">
+                    <Moon className="w-4 h-4 mr-2" />
+                    Dark
+                    {theme === 'dark' && <span className="ml-auto text-xs">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <SignOutButton redirectUrl="/sign-in">
-                    <DropdownMenuItem className="text-red-400 hover:!text-red-400 hover:!bg-red-900/20 cursor-pointer">
+                    <DropdownMenuItem className="text-red-400 hover:!text-red-400 hover:!bg-red-500/20/20 cursor-pointer">
                       <LogOut className="w-4 h-4 mr-2" />
                       Log Out
                     </DropdownMenuItem>
@@ -1290,15 +1309,15 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
             {/* Super Admin Company Selector */}
             {isSuperAdmin && (
-              <div className="p-4 border-b border-gray-800/50 bg-gray-900/20 space-y-3">
+              <div className="p-4 border-b border-border/50 bg-card/20 space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     Select Company
                   </label>
                   <select
                     value={selectedCompanyId}
                     onChange={(e) => setSelectedCompanyId(e.target.value)}
-                    className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-100 focus:border-blue-600/50 focus:outline-none transition-colors"
+                    className="w-full bg-secondary border border-border/50 rounded-lg px-3 py-2 text-sm text-foreground focus:border-blue-600/50 focus:outline-none transition-colors"
                   >
                     <option value="">Select a company...</option>
                     {Array.from(new Set(users.map(u => u.company_id))).map(companyId => {
@@ -1313,13 +1332,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 </div>
 
                 {loadingProjects && (
-                  <div className="text-xs text-gray-400 text-center py-2">
+                  <div className="text-xs text-muted-foreground text-center py-2">
                     Loading projects...
                   </div>
                 )}
 
                 {selectedCompanyId && !loadingProjects && (
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-muted-foreground">
                     Showing {userProjects.length} project{userProjects.length !== 1 ? 's' : ''} for {users.find(u => u.company_id === selectedCompanyId)?.company.name}
                   </div>
                 )}
@@ -1328,13 +1347,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
             {/* Upcoming Meeting for Users */}
             {upcomingMeeting && (
-              <div className="p-4 border-b border-gray-800/50">
-                <div className="bg-red-950/30 border border-red-800/50 rounded-lg p-3">
+              <div className="p-4 border-b border-border/50">
+                <div className="bg-brand-blue/10 border border-brand-blue/20 rounded-lg p-3">
                   <div className="flex items-start gap-2">
-                    <Video className="w-5 h-5 text-red-400 mt-0.5" />
+                    <Video className="w-5 h-5 text-brand-blue mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-white mb-1">{upcomingMeeting.title}</h3>
-                      <div className="flex items-center gap-1 text-xs text-gray-300 mb-2">
+                      <h3 className="font-semibold text-foreground mb-1">{upcomingMeeting.title}</h3>
+                      <div className="flex items-center gap-1 text-xs text-foreground mb-2">
                         <Calendar className="w-3 h-3" />
                         <span>
                           {new Date(upcomingMeeting.scheduledAt).toLocaleTimeString('en-US', {
@@ -1349,7 +1368,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                         href={`/meetings/${upcomingMeeting.id}/join`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 bg-red-700/80 hover:bg-red-600 text-white text-sm px-3 py-1.5 rounded transition-colors"
+                        className="inline-flex items-center gap-1 bg-brand-blue hover:bg-brand-blue-hover text-white text-sm px-3 py-1.5 rounded transition-colors"
                       >
                         <Video className="w-3 h-3" />
                         Join Meeting
@@ -1362,10 +1381,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             )}
 
             {/* Meetings Button */}
-            <div className="p-4 border-b border-gray-800/50">
+            <div className="p-4 border-b border-border/50">
               <button
                 onClick={() => setShowMeetingsModal(true)}
-                className="w-full flex items-center justify-center gap-2 bg-red-700/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-hover text-white px-4 py-2 rounded-lg transition-colors"
               >
                 <Video className="w-4 h-4" />
                 My Meetings
@@ -1382,11 +1401,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                       console.log('🖱️ Project clicked:', project.title, project.id);
                       setSelectedProject(project);
                     }}
-                    className={`w-full text-left p-4 rounded-lg transition-colors ${
-                      selectedProject?.id === project.id
-                        ? 'bg-red-700/80 text-white'
-                        : 'bg-gray-900/80 hover:bg-gray-800/80 text-gray-200'
-                    }`}
+                    className={`w-full text-left p-4 rounded-lg transition-colors ${selectedProject?.id === project.id
+                      ? 'bg-brand-blue text-white'
+                      : 'bg-card/80 hover:bg-secondary/80 text-foreground'
+                      }`}
                   >
                     <h3 className="font-semibold mb-1">{project.title}</h3>
                     {project.description && (
@@ -1406,7 +1424,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                           setChatProjectId(null);
                         }
                       }}
-                      className="absolute top-2 right-2 p-2 bg-gray-800/80 rounded-full hover:bg-gray-700 transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-secondary/80 rounded-full hover:bg-secondary transition-colors"
                     >
                       {chatState === 'closed' ? (
                         <MessageCircle className="w-4 h-4" />
@@ -1428,12 +1446,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       {/* Main Content Area - hidden on mobile */}
       <div className="hidden md:flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
-        <div className="bg-gray-900/80 border-b border-gray-800/50 p-3 flex items-center justify-between">
+        <div className="bg-card/80 border-b border-border/50 p-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Toggle Sidebar Button */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-gray-800/60 rounded-lg transition-colors"
+              className="p-2 hover:bg-secondary/60 rounded-lg transition-colors"
               title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             >
               {isSidebarOpen ? (
@@ -1456,7 +1474,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors"
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? (
@@ -1474,10 +1492,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         </div>
 
         {/* Iframe Container */}
-        <div className="flex-1 bg-white relative">
+        <div className="flex-1 bg-background relative">
           {chatState === 'expanded' ? (
-            <div className="w-full h-full bg-gray-900 flex flex-col">
-              <div className="p-4 border-b border-gray-800/50 flex justify-between items-center bg-gray-900/60">
+            <div className="w-full h-full bg-card flex flex-col">
+              <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/60">
                 <h3 className="font-bold">
                   {getProjectForChat()?.title}
                 </h3>
@@ -1485,7 +1503,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   {isSuperAdmin && (
                     <button
                       onClick={deleteEntireChat}
-                      className="p-2 hover:bg-red-900/40 rounded-lg text-red-300 transition-colors"
+                      className="p-2 hover:bg-red-500/20/40 rounded-lg text-red-400 transition-colors"
                       title="Delete entire chat"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1493,42 +1511,40 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   )}
                   <button
                     onClick={() => setChatState('sidebar')}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                    className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                   >
                     <Minimize2 className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setChatState('closed')}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+                    className="p-2 hover:bg-secondary/50 rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-              <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-gray-950/50">
+              <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
                 <div className="space-y-4">
                   {messages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex flex-col ${
-                        msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                      }`}
+                      className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                        }`}
                     >
-                      <p className="text-xs text-gray-400 mb-1 px-1">
+                      <p className="text-xs text-muted-foreground mb-1 px-1">
                         {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                       </p>
                       <div
-                        className={`rounded-lg px-3 py-2 max-w-md ${
-                          msg.userId === clerkUser?.id
-                            ? 'bg-blue-700/80 text-white'
-                            : 'bg-gray-800/70 text-gray-200'
-                        }`}
+                        className={`rounded-lg px-3 py-2 max-w-md ${msg.userId === clerkUser?.id
+                          ? 'bg-brand-blue text-white'
+                          : 'bg-muted border border-border text-foreground'
+                          }`}
                       >
                         {msg.message && msg.message.trim() && (
-                        <p className={msg.message.includes('was deleted') ? 'italic text-gray-400' : ''}>
-                          {msg.message}
-                        </p>
-                      )}
+                          <p className={msg.message.includes('was deleted') ? 'italic text-muted-foreground' : ''}>
+                            {msg.message}
+                          </p>
+                        )}
                         {msg.attachments && msg.attachments.length > 0 && (
                           <div className={msg.message && msg.message.trim() ? "mt-2 space-y-2" : "space-y-2"}>
                             {msg.attachments.map((attachment, idx) => (
@@ -1539,14 +1555,14 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                       <img
                                         src={attachment.url}
                                         alt={attachment.filename}
-                                        className="max-w-full rounded border border-gray-600"
+                                        className="max-w-full rounded border border-border"
                                         style={{ maxHeight: '300px' }}
                                       />
                                     </a>
                                     {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute top-1 right-1 bg-red-500 hover:bg-red-500 rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                         title="Delete attachment"
                                       >
                                         <Trash2 className="w-3 h-3" />
@@ -1554,7 +1570,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     )}
                                   </div>
                                 ) : attachment.type === 'voice' ? (
-                                  <div className="flex items-center gap-2 bg-gray-600 rounded px-3 py-2">
+                                  <div className="flex items-center gap-2 bg-muted rounded px-3 py-2">
                                     <Mic className="w-4 h-4 text-blue-400" />
                                     <audio
                                       controls
@@ -1567,12 +1583,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                       Your browser does not support audio playback.
                                     </audio>
                                     {attachment.duration && (
-                                      <span className="text-xs text-gray-400">{formatTime(attachment.duration)}</span>
+                                      <span className="text-xs text-muted-foreground">{formatTime(attachment.duration)}</span>
                                     )}
                                     {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                        className="text-red-400 hover:text-red-300"
+                                        className="text-red-400 hover:text-red-400"
                                         title="Delete voice note"
                                       >
                                         <Trash2 className="w-3 h-3" />
@@ -1580,12 +1596,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-2 bg-gray-600 rounded px-2 py-1 text-xs">
+                                  <div className="flex items-center gap-2 bg-muted rounded px-2 py-1 text-xs">
                                     <a
                                       href={attachment.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 flex-1 hover:text-gray-300"
+                                      className="flex items-center gap-2 flex-1 hover:text-foreground"
                                     >
                                       <FileIcon className="w-4 h-4" />
                                       <span className="flex-1 truncate">{attachment.filename}</span>
@@ -1594,7 +1610,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                                     {isAdmin && (
                                       <button
                                         onClick={() => deleteAttachment(msg.id, attachment.url, attachment.filename)}
-                                        className="text-red-400 hover:text-red-300 ml-1"
+                                        className="text-red-400 hover:text-red-400 ml-1"
                                         title="Delete attachment"
                                       >
                                         <Trash2 className="w-3 h-3" />
@@ -1614,21 +1630,21 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   ))}
                 </div>
               </div>
-              <div className="p-4 border-t border-gray-800/50 bg-gray-900/40">
+              <div className="p-4 border-t border-border/50 bg-card/40">
                 {selectedFiles.length > 0 && (
                   <div className="mb-2 space-y-1">
                     {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center gap-2 bg-gray-800/70 rounded px-2 py-1 text-xs">
+                      <div key={index} className="flex items-center gap-2 bg-secondary/70 rounded px-2 py-1 text-xs">
                         {file.type.startsWith('image/') ? (
                           <ImageIcon className="w-3 h-3" />
                         ) : (
                           <FileIcon className="w-3 h-3" />
                         )}
                         <span className="flex-1 truncate">{file.name}</span>
-                        <span className="text-gray-400">{formatFileSize(file.size)}</span>
+                        <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
                         <button
                           onClick={() => removeFile(index)}
-                          className="text-red-400 hover:text-red-300"
+                          className="text-red-400 hover:text-red-400"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -1637,31 +1653,31 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   </div>
                 )}
                 {audioBlob && (
-                  <div className="mb-2 bg-gray-700 rounded px-3 py-2 flex items-center gap-2">
+                  <div className="mb-2 bg-secondary rounded px-3 py-2 flex items-center gap-2">
                     <Mic className="w-4 h-4 text-blue-400" />
                     <span className="text-sm flex-1">Voice note ({formatTime(recordingTime)})</span>
                     <button
                       onClick={sendVoiceNote}
-                      className="bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 text-xs"
+                      className="bg-blue-500 hover:bg-blue-500 rounded px-3 py-1 text-xs"
                       disabled={uploadingFiles}
                     >
                       Send
                     </button>
                     <button
                       onClick={cancelRecording}
-                      className="text-red-400 hover:text-red-300"
+                      className="text-red-400 hover:text-red-400"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 )}
                 {isRecording && (
-                  <div className="mb-2 bg-red-900/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                  <div className="mb-2 bg-red-500/20/20 border border-red-600 rounded px-3 py-2 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                     <span className="text-sm flex-1">Recording... {formatTime(recordingTime)}</span>
                     <button
                       onClick={stopRecording}
-                      className="bg-red-600 hover:bg-red-700 rounded-lg p-2"
+                      className="bg-red-500 hover:bg-red-500 rounded-lg p-2"
                     >
                       <Square className="w-4 h-4" />
                     </button>
@@ -1679,7 +1695,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="bg-gray-700 hover:bg-gray-600 rounded-lg p-2"
+                    className="bg-secondary hover:bg-muted rounded-lg p-2"
                     disabled={uploadingFiles || isRecording}
                   >
                     <Paperclip className="w-5 h-5" />
@@ -1687,16 +1703,15 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   <button
                     type="button"
                     onClick={isRecording ? stopRecording : startRecording}
-                    className={`${
-                      isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
-                    } rounded-lg p-2`}
+                    className={`${isRecording ? 'bg-red-500 hover:bg-red-500' : 'bg-secondary hover:bg-muted'
+                      } rounded-lg p-2`}
                     disabled={uploadingFiles || audioBlob !== null}
                   >
                     <Mic className="w-5 h-5" />
                   </button>
                   <input
                     name="message"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-foreground focus:border-blue-500 outline-none"
                     placeholder="Type a message..."
                     disabled={uploadingFiles || isRecording}
                     onKeyDown={(e) => {
@@ -1708,7 +1723,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   />
                   <button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 rounded-lg p-2 disabled:opacity-50"
+                    className="bg-blue-500 hover:bg-blue-500 rounded-lg p-2 disabled:opacity-50"
                     disabled={uploadingFiles || isRecording}
                   >
                     {uploadingFiles ? (
@@ -1723,16 +1738,13 @@ export default function ClientPortal({ projects, userName, companyName, user, is
           ) : selectedProject ? (
             <div className="relative w-full h-full">
               {isProjectLoading && (
-                <div className="absolute inset-0 bg-gray-950 flex items-center justify-center z-10">
+                <div className="absolute inset-0 bg-background flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-3">
                     <LogoWineFill
                       width={300}
                       duration={10}
-                      color="#ff0000"
-                      baseColor="#555555"
-                      outlineColor="#ffffff"
                     />
-                    <p className="text-gray-400 text-lg mt-4">Loading {selectedProject.title}...</p>
+                    <p className="text-muted-foreground text-lg mt-4">Loading {selectedProject.title}...</p>
                   </div>
                 </div>
               )}
@@ -1752,9 +1764,31 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 }}
               />
             </div>
+          ) : hasNoProjects ? (
+            <div className="flex items-center justify-center h-full bg-background text-foreground">
+              <div className="text-center max-w-md p-8">
+                <div className="mb-4">
+                  <svg className="w-20 h-20 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold mb-2 text-foreground">No Projects Assigned</h2>
+                <p className="text-muted-foreground mb-6">
+                  You haven't been assigned to any projects yet. Please contact your administrator to get access to projects.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <a
+                    href="/contact"
+                    className="inline-block px-6 py-3 bg-red-500 hover:bg-red-500 rounded-lg transition-colors text-foreground font-medium"
+                  >
+                    Contact Administrator
+                  </a>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-full bg-gray-950 text-white">
-              <p className="text-gray-400">Select a project from the sidebar</p>
+            <div className="flex items-center justify-center h-full bg-background text-foreground">
+              <p className="text-muted-foreground">Select a project from the sidebar</p>
             </div>
           )}
         </div>

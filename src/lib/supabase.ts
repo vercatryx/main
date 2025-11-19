@@ -15,15 +15,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * Only use this in server components and API routes
  */
 export function getServerSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.verca_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.verca_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
+    throw new Error('Missing verca_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL environment variable');
   }
 
   if (!serviceKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+    throw new Error('Missing verca_SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable');
   }
 
   return createClient(url, serviceKey, {

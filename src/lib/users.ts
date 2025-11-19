@@ -200,18 +200,23 @@ export async function createUser(input: CreateUserInput): Promise<User> {
 /**
  * Update a user
  */
-export async function updateUser(userId: string, input: UpdateUserInput): Promise<User> {
+export async function updateUser(userId: string, input: UpdateUserInput): Promise<User | null> {
   const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('users')
     .update(input)
     .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error updating user:', error);
     throw new Error('Failed to update user');
+  }
+
+  if (!data) {
+    console.error('User not found:', userId);
+    return null;
   }
 
   return data;

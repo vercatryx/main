@@ -1,40 +1,31 @@
 import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
-import { SignIn, SignOutButton } from "@clerk/nextjs";
+import { SignOutButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
-import { getCompanyProjects } from "@/lib/projects";
+import { getCompanyProjects, getProjectById } from "@/lib/projects";
 import { getCurrentUser, getUserWithCompany, getAllUsers } from "@/lib/users";
 import { getAllCompanies } from "@/lib/companies";
 import { isSuperAdmin } from "@/lib/permissions";
+import { getUserAccessibleProjects } from "@/lib/user-project-permissions";
 import ClientPortal from "./page-client";
 import AccountSetupChecker from "@/components/account-setup-checker";
+import { ThemedSignIn } from "@/components/themed-signin";
 
 export default async function ClientsPage() {
   const clerkUser = await currentUser();
 
   if (!clerkUser) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white">
+      <main className="min-h-screen bg-background text-foreground">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
               Please Sign In
             </h1>
-            <p className="text-lg text-gray-400 mb-8">
+            <p className="text-lg text-muted-foreground mb-8">
               You need to be logged in to access the client portal.
             </p>
-            <SignIn
-              path="/clients"
-              appearance={{
-                variables: {
-                  colorPrimary: "#b91c1c",
-                  colorBackground: "#0c0a09",
-                  colorText: "#f5f5f5",
-                  colorInputBackground: "#1c1917",
-                  colorInputText: "#e5e5e5",
-                },
-              }}
-            />
+            <ThemedSignIn path="/clients" />
           </div>
         </div>
       </main>
@@ -56,7 +47,7 @@ export default async function ClientsPage() {
     const allUsers = await getAllUsers();
 
     return (
-      <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center text-foreground">Loading...</div>}>
         <ClientPortal
           projects={[]}
           userName={userName}
@@ -86,13 +77,13 @@ export default async function ClientsPage() {
 
   if (!userWithCompany) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white">
+      <main className="min-h-screen bg-background text-foreground">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-100">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
               Error Loading Account
             </h1>
-            <p className="text-lg text-gray-400 mb-8">
+            <p className="text-lg text-muted-foreground mb-8">
               Could not load your account information. Please try again later.
             </p>
           </div>
@@ -101,19 +92,25 @@ export default async function ClientsPage() {
     );
   }
 
-  // Get projects for user's company
-  const projects = await getCompanyProjects(userWithCompany.company_id);
+  // Get accessible projects for user (based on permissions)
+  const accessibleProjectIds = await getUserAccessibleProjects(userWithCompany.id, userWithCompany.company_id);
+
+  // Fetch full project details for accessible projects
+  const projects = await Promise.all(
+    accessibleProjectIds.map(id => getProjectById(id))
+  ).then(results => results.filter((p): p is NonNullable<typeof p> => p !== null));
 
   const userName = [userWithCompany.first_name, userWithCompany.last_name].filter(Boolean).join(' ') || [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || clerkUser.emailAddresses[0].emailAddress.split('@')[0];
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center text-foreground">Loading...</div>}>
       <ClientPortal
         projects={projects}
         userName={userName}
         companyName={userWithCompany.company.name}
         user={userWithCompany}
         isSuperAdmin={false}
+        hasNoProjects={projects.length === 0}
       />
     </Suspense>
   );

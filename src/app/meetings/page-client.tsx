@@ -217,7 +217,7 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold">My Meetings</h1>
-          <p className="text-gray-400 mt-2">
+          <p className="text-muted-foreground mt-2">
             Welcome back, {userInfo.firstName || userInfo.email}
           </p>
         </div>
@@ -235,12 +235,12 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
       </div>
 
       {meetings.length === 0 ? (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="text-center py-12">
-              <Video className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-300">No upcoming meetings</h3>
-              <p className="mt-2 text-gray-400">
+              <Video className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="mt-4 text-lg font-medium text-foreground">No upcoming meetings</h3>
+              <p className="mt-2 text-muted-foreground">
                 You don't have any meetings scheduled at the moment.
               </p>
               {userInfo.isAdmin && (
@@ -255,31 +255,31 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {meetings.map((meeting) => (
-            <Card key={meeting.id} className="bg-gray-900 border-gray-800">
+            <Card key={meeting.id} className="bg-card border-border">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-xl">{meeting.title}</CardTitle>
                   {getStatusBadge(meeting.status)}
                 </div>
                 {meeting.description && (
-                  <CardDescription className="text-gray-400">
+                  <CardDescription className="text-muted-foreground">
                     {meeting.description}
                   </CardDescription>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Calendar className="h-4 w-4 text-gray-400" />
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span>{formatDate(meeting.scheduledAt)}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Clock className="h-4 w-4 text-gray-400" />
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
                   <span>
                     {formatTime(meeting.scheduledAt)} ({meeting.duration} min)
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Users className="h-4 w-4 text-gray-400" />
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <Users className="h-4 w-4 text-muted-foreground" />
                   <span>{meeting.participantUserIds.length + 1} participants</span>
                 </div>
               </CardContent>
@@ -314,10 +314,10 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
       {/* Create Meeting Dialog */}
       {userInfo.isAdmin && users && (
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Meeting</DialogTitle>
-              <DialogDescription className="text-gray-400">
+              <DialogDescription className="text-muted-foreground">
                 Schedule a meeting with one or more users
               </DialogDescription>
             </DialogHeader>
@@ -331,7 +331,7 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Team Sync"
                   required
-                  className="bg-gray-800 border-gray-700"
+                  className="bg-secondary border-border"
                 />
               </div>
 
@@ -343,7 +343,7 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Discuss project progress and next steps"
                   rows={3}
-                  className="bg-gray-800 border-gray-700"
+                  className="bg-secondary border-border"
                 />
               </div>
 
@@ -356,7 +356,7 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
                     value={formData.scheduledAt}
                     onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
                     required
-                    className="bg-gray-800 border-gray-700"
+                    className="bg-secondary border-border"
                   />
                 </div>
 
@@ -366,10 +366,10 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
                     value={formData.duration}
                     onValueChange={(value) => setFormData({ ...formData, duration: value })}
                   >
-                    <SelectTrigger className="bg-gray-800 border-gray-700">
+                    <SelectTrigger className="bg-secondary border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                    <SelectContent className="bg-secondary border-border text-foreground">
                       <SelectItem value="15">15 minutes</SelectItem>
                       <SelectItem value="30">30 minutes</SelectItem>
                       <SelectItem value="45">45 minutes</SelectItem>
@@ -383,7 +383,7 @@ export default function MeetingsClient({ userInfo, initialMeetings, users }: Mee
 
               <div className="space-y-2">
                 <Label>Participants ({formData.participantUserIds.length} selected)</Label>
-                <div className="border border-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-gray-800">
+                <div className="border border-border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-secondary">
                   {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
                     <div key={user.id} className="flex items-center space-x-2">
                       <Checkbox

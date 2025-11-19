@@ -7,7 +7,7 @@ async function MeetingsPage() {
 
   if (!userId) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-bold">Access Denied</h1>
           <p className="mt-4">You must be logged in to view this page.</p>
@@ -52,7 +52,7 @@ async function MeetingsPage() {
 
 export default function Page() {
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <MeetingsPage />
       </div>

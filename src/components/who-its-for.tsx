@@ -25,25 +25,25 @@ const industries = [
 
 export function WhoItsFor() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gray-900 dark:bg-gray-900">
+    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-background">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-white text-center mb-6 text-3xl md:text-5xl">
+        <h2 className="text-foreground text-center mb-6 text-3xl md:text-5xl">
           Who Is This For?
         </h2>
-        <p className="text-xl md:text-2xl text-gray-300 text-center mb-16">
+        <p className="text-xl md:text-2xl text-muted-foreground text-center mb-16">
           We help businesses in all industries, but especially those with lots of paperwork and routine tasks.
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {industries.map((industry, index) => (
-            <div key={index} className="bg-black p-8 rounded-xl border border-gray-800">
+            <div key={index} className="bg-card p-8 rounded-xl border border-border">
               <div className="flex items-start gap-4">
-                <div className="w-14 h-14 bg-red-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-14 h-14 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                   <industry.icon className="w-7 h-7 text-red-500" />
                 </div>
                 <div>
-                  <h3 className="text-white text-xl mb-2">{industry.name}</h3>
-                  <p className="text-gray-300 text-lg">{industry.description}</p>
+                  <h3 className="text-foreground text-xl mb-2">{industry.name}</h3>
+                  <p className="text-foreground text-lg">{industry.description}</p>
                 </div>
               </div>
             </div>

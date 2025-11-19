@@ -90,13 +90,20 @@ export async function addMessage(
   projectId: string,
   message: Omit<ChatMessage, 'id' | 'timestamp'>
 ): Promise<ChatMessage> {
-  const newMessage: ChatMessage = {
-    ...message,
-    id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    timestamp: Date.now(),
-  };
+  const timestamp = Date.now();
 
-  const row = messageToRow(projectId, newMessage);
+  // Let the database generate the UUID
+  const row = {
+    project_id: projectId,
+    role: 'user' as const,
+    content: JSON.stringify({
+      userId: message.userId,
+      userName: message.userName,
+      message: message.message,
+      timestamp,
+    }),
+    attachments: message.attachments || [],
+  };
 
   const { data, error } = await supabase
     .from('chat_messages')
@@ -133,7 +140,18 @@ export async function updateProjectMessages(
 
   // Insert new messages
   if (messages.length > 0) {
-    const rows = messages.map(msg => messageToRow(projectId, msg));
+    // Let the database generate UUIDs for new messages
+    const rows = messages.map(msg => ({
+      project_id: projectId,
+      role: 'user' as const,
+      content: JSON.stringify({
+        userId: msg.userId,
+        userName: msg.userName,
+        message: msg.message,
+        timestamp: msg.timestamp,
+      }),
+      attachments: msg.attachments || [],
+    }));
 
     const { error: insertError } = await supabase
       .from('chat_messages')

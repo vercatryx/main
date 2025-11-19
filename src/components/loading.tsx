@@ -1,18 +1,18 @@
 import React from "react";
-import {logoPath} from "@/components/logoPath";
+import { logoPath } from "@/components/logoPath";
 
 export default function LogoWineFill({
-                                         width = 300,
-                                         height = 240,
-                                         duration = 8,
-                                         hold = 0.04,
-                                         easing = "ease-in-out",
-                                         color = "#DC2626",         // ← red fill color
-                                         baseColor = "#e6e6e6",     // ← background fill color
-                                         outlineColor = "#ffffff",  // ← stroke outline
-                                         strokeWidth = 6,
-                                         className = ""
-                                     }) {
+    width = 300,
+    height = 240,
+    duration = 8,
+    hold = 0.04,
+    easing = "ease-in-out",
+    color = "var(--loading-fill)",         // ← red fill color
+    baseColor = "var(--loading-base)",     // ← background fill color
+    outlineColor = "#ffffff",  // ← stroke outline
+    strokeWidth = 6,
+    className = ""
+}) {
     const fillFraction = (1 - hold) / 2;
     const fillEndPct = Math.round(fillFraction * 100);
     const holdEndPct = Math.round((fillFraction + hold) * 100);

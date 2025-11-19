@@ -19,7 +19,7 @@ async function JoinMeetingPage({ params }: RouteParams) {
 
   if (!meeting) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-bold">Meeting Not Found</h1>
           <p className="mt-4">The meeting you're looking for doesn't exist.</p>
@@ -40,7 +40,7 @@ async function JoinMeetingPage({ params }: RouteParams) {
 
     if (publicMetadata?.role !== 'superuser') {
       return (
-        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-4xl font-bold">Access Denied</h1>
             <p className="mt-4">You don't have permission to join this meeting.</p>
@@ -71,7 +71,7 @@ async function JoinMeetingPage({ params }: RouteParams) {
 
 export default function Page(props: RouteParams) {
   return (
-    <main className="min-h-screen bg-black">
+    <main className="min-h-screen bg-background">
       <JoinMeetingPage {...props} />
     </main>
   );

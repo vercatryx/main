@@ -48,21 +48,21 @@ export default function AdminAvailabilityPage() {
   }, [id, response]);
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
         <div className={`p-8 rounded-lg border ${
           status === 'success'
             ? 'bg-green-900/20 border-green-700'
             : status === 'error'
-            ? 'bg-red-900/20 border-red-700'
-            : 'bg-gray-900 border-gray-700'
+            ? 'bg-red-500/20/20 border-red-500'
+            : 'bg-card border-border'
         }`}>
           <h1 className="text-3xl font-bold mb-4">
             {status === 'loading' && 'Updating Status...'}
             {status === 'success' && '✅ Success!'}
             {status === 'error' && '❌ Error'}
           </h1>
-          <p className="text-lg text-gray-300">{message}</p>
+          <p className="text-lg text-foreground">{message}</p>
         </div>
       </div>
     </main>

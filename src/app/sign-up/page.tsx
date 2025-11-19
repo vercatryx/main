@@ -1,28 +1,38 @@
+"use client";
+
 import { SignUp } from "@clerk/nextjs";
-import { redirect } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { verifyInvitationToken } from "@/lib/invitations";
+import { useTheme } from "@/contexts/theme-context";
 
-interface SignUpPageProps {
-  searchParams: Promise<{ invitation?: string }>;
-}
+export default function SignUpPage() {
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get('invitation');
+  const { theme } = useTheme();
+  const isLightMode = theme === 'light';
+  const [tokenData, setTokenData] = useState<{ email: string } | null>(null);
 
-export default async function SignUpPage({ searchParams }: SignUpPageProps) {
-  const params = await searchParams;
-  const invitationToken = params.invitation;
+  useEffect(() => {
+    if (invitationToken) {
+      const data = verifyInvitationToken(invitationToken);
+      setTokenData(data);
+    }
+  }, [invitationToken]);
 
   // Verify invitation token
   if (!invitationToken) {
     // No invitation - redirect to home or show error
     return (
-      <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center p-8">
-          <h1 className="text-4xl font-bold mb-4 text-gray-100">Invitation Required</h1>
-          <p className="text-lg text-gray-400 mb-8">
+          <h1 className="text-4xl font-bold mb-4 text-foreground">Invitation Required</h1>
+          <p className="text-lg text-muted-foreground mb-8">
             You need an invitation to create an account. Please contact your administrator.
           </p>
           <a
             href="/"
-            className="px-6 py-3 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors text-white font-medium inline-block"
+            className="px-6 py-3 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors text-foreground font-medium inline-block"
           >
             Go Home
           </a>
@@ -32,19 +42,27 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   }
 
   // Verify the token is valid
-  const tokenData = verifyInvitationToken(invitationToken);
+  if (tokenData === null) {
+    return (
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!tokenData) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center p-8">
-          <h1 className="text-4xl font-bold mb-4 text-gray-100">Invalid or Expired Invitation</h1>
-          <p className="text-lg text-gray-400 mb-8">
+          <h1 className="text-4xl font-bold mb-4 text-foreground">Invalid or Expired Invitation</h1>
+          <p className="text-lg text-muted-foreground mb-8">
             This invitation link is invalid or has expired. Please contact your administrator for a new invitation.
           </p>
           <a
             href="/"
-            className="px-6 py-3 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors text-white font-medium inline-block"
+            className="px-6 py-3 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors text-foreground font-medium inline-block"
           >
             Go Home
           </a>
@@ -54,11 +72,11 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-gray-100">Create Your Account</h1>
-          <p className="text-gray-400">
+          <h1 className="text-3xl font-bold mb-2 text-foreground">Create Your Account</h1>
+          <p className="text-muted-foreground">
             Please sign up with the email: <strong>{tokenData.email}</strong>
           </p>
         </div>
@@ -67,17 +85,17 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
           appearance={{
             variables: {
               colorPrimary: "#3b82f6",
-              colorBackground: "#0c0a09",
-              colorText: "#f5f5f5",
-              colorInputBackground: "#1c1917",
-              colorInputText: "#e5e5e5",
+              colorBackground: isLightMode ? "#ffffff" : "#0c0a09",
+              colorText: isLightMode ? "#171717" : "#f5f5f5",
+              colorInputBackground: isLightMode ? "#f5f5f5" : "#1c1917",
+              colorInputText: isLightMode ? "#171717" : "#e5e5e5",
             },
             elements: {
-              card: "bg-gray-900/80 border border-gray-800/50",
-              headerTitle: "text-gray-100",
-              headerSubtitle: "text-gray-400",
-              formButtonPrimary: "bg-blue-700/80 hover:bg-blue-600",
-              footerActionLink: "text-blue-400 hover:text-blue-300",
+              card: isLightMode ? "bg-white border border-gray-200" : "bg-gray-900/80 border border-gray-800/50",
+              headerTitle: isLightMode ? "text-gray-900" : "text-gray-100",
+              headerSubtitle: isLightMode ? "text-gray-600" : "text-gray-400",
+              formButtonPrimary: "bg-blue-500 hover:bg-blue-600",
+              footerActionLink: "text-blue-500 hover:text-blue-600",
             },
           }}
           forceRedirectUrl="/clients"
@@ -88,9 +106,9 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
         />
 
         <div className="mt-6 text-center">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
-            <a href="/sign-in" className="text-blue-400 hover:text-blue-300">
+            <a href="/sign-in" className="text-blue-400 hover:text-blue-400">
               Sign in
             </a>
           </p>

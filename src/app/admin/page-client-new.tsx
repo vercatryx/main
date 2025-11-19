@@ -61,12 +61,12 @@ export default function AdminClientNew({
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
-            <p className="text-gray-400">
+            <p className="text-muted-foreground">
               {isSuperAdmin ? "Super Admin" : "Company Admin"} - {userEmail}
             </p>
           </div>
           <SignOutButton redirectUrl="/sign-in">
-            <button className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors">
+            <button className="flex items-center gap-2 px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors">
               <LogOut className="w-4 h-4" />
               Sign Out
             </button>
@@ -75,7 +75,7 @@ export default function AdminClientNew({
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-800/50 mb-8">
+      <div className="border-b border-border/50 mb-8">
         <div className="flex gap-4">
           {isSuperAdmin && (
             <button
@@ -83,12 +83,12 @@ export default function AdminClientNew({
               className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
                 activeTab === "companies"
                   ? "border-blue-600 text-blue-400"
-                  : "border-transparent text-gray-400 hover:text-gray-300"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <Building2 className="w-5 h-5" />
               Companies
-              <span className="px-2 py-0.5 bg-gray-800/60 rounded text-xs">
+              <span className="px-2 py-0.5 bg-secondary/60 rounded text-xs">
                 {companies.length}
               </span>
             </button>
@@ -98,12 +98,12 @@ export default function AdminClientNew({
             className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
               activeTab === "users"
                 ? "border-blue-600 text-blue-400"
-                : "border-transparent text-gray-400 hover:text-gray-300"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <Users className="w-5 h-5" />
             Users
-            <span className="px-2 py-0.5 bg-gray-800/60 rounded text-xs">
+            <span className="px-2 py-0.5 bg-secondary/60 rounded text-xs">
               {initialUsers.length}
             </span>
           </button>
@@ -113,12 +113,12 @@ export default function AdminClientNew({
               className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
                 activeTab === "projects"
                   ? "border-blue-600 text-blue-400"
-                  : "border-transparent text-gray-400 hover:text-gray-300"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <FolderOpen className="w-5 h-5" />
               Projects
-              <span className="px-2 py-0.5 bg-gray-800/60 rounded text-xs">
+              <span className="px-2 py-0.5 bg-secondary/60 rounded text-xs">
                 {projectsArray.length}
               </span>
             </button>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2, Send } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2, Send, FolderOpen } from "lucide-react";
 import type { User, Company } from "@/types/company";
+import UserProjectAssignment from "./user-project-assignment";
 
 interface UserWithCompany extends User {
   company: Company;
@@ -19,6 +20,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithCompany | null>(null);
   const [loading, setLoading] = useState(false);
+  const [assigningProjectsUser, setAssigningProjectsUser] = useState<UserWithCompany | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     first_name: "",
@@ -189,34 +191,34 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
         <h2 className="text-2xl font-semibold">Users</h2>
         <button
           onClick={openAddModal}
-          className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Add User
         </button>
       </div>
 
-      <div className="bg-gray-900/80 rounded-lg border border-gray-800/50 overflow-hidden">
+      <div className="bg-card/80 rounded-lg border border-border/50 overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-800/50 border-b border-gray-800/50">
+          <thead className="bg-secondary/50 border-b border-border/50">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Name</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Email</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Phone</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Name</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Email</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Phone</th>
               {isSuperAdmin && (
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Company</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Company</th>
               )}
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Role</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-gray-300">Actions</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Role</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Status</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800/50">
+          <tbody className="divide-y divide-border/50">
             {users.map((user) => (
-              <tr key={user.id} className={`hover:bg-gray-800/30 ${user.status === 'inactive' && 'opacity-50'}`}>
+              <tr key={user.id} className={`hover:bg-secondary/30 ${user.status === 'inactive' && 'opacity-50'}`}>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <UserIcon className="w-4 h-4 text-gray-400" />
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
                     <span className="font-medium">
                       {user.first_name || user.last_name
                         ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
@@ -225,21 +227,21 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 text-gray-300">
-                    <Mail className="w-4 h-4 text-gray-400" />
+                  <div className="flex items-center gap-2 text-foreground">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
                     {user.email}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-300">
+                <td className="px-4 py-3 text-foreground">
                   <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-400" />
+                    <Phone className="w-4 h-4 text-muted-foreground" />
                     {user.phone || '—'}
                   </div>
                 </td>
                 {isSuperAdmin && (
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-gray-300">
-                      <Building2 className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-2 text-foreground">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
                       {user.company?.name || 'Unknown'}
                     </div>
                   </td>
@@ -249,7 +251,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                     className={`px-2 py-1 rounded-full text-xs font-medium ${
                       user.role === 'admin'
                         ? 'bg-purple-900/60 text-purple-300'
-                        : 'bg-gray-800/60 text-gray-300'
+                        : 'bg-secondary/60 text-foreground'
                     }`}
                   >
                     {user.role}
@@ -262,7 +264,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                         ? 'bg-green-900/60 text-green-300'
                         : user.status === 'pending'
                         ? 'bg-yellow-900/60 text-yellow-300'
-                        : 'bg-red-900/60 text-red-300'
+                        : 'bg-red-500/20/60 text-red-400'
                     }`}
                   >
                     {user.status === 'active' && '● Active'}
@@ -275,15 +277,22 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                     {user.status === 'pending' && (
                       <button
                         onClick={() => sendInvitation(user.id)}
-                        className="p-1.5 hover:bg-blue-900/40 rounded transition-colors text-blue-400"
+                        className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400"
                         title="Send invitation email"
                       >
                         <Send className="w-4 h-4" />
                       </button>
                     )}
                     <button
+                      onClick={() => setAssigningProjectsUser(user)}
+                      className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400"
+                      title="Assign projects"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => openEditModal(user)}
-                      className="p-1.5 hover:bg-gray-800/60 rounded transition-colors"
+                      className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
                       title="Edit user"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -291,7 +300,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                     {user.status !== 'inactive' && (
                       <button
                         onClick={() => handleDelete(user.id)}
-                        className="p-1.5 hover:bg-red-900/40 rounded transition-colors text-red-400"
+                        className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
                         title="Deactivate user"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -305,7 +314,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
         </table>
 
         {users.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
+          <div className="text-center py-12 text-muted-foreground">
             No users found. Click "Add User" to create one.
           </div>
         )}
@@ -313,15 +322,15 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900/95 rounded-lg p-6 max-w-lg w-full border border-gray-800/50">
+        <div className="fixed inset-0 bg-background/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-card/95 rounded-lg p-6 max-w-lg w-full border border-border/50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">
                 {editingUser ? "Edit User" : "Add User"}
               </h3>
               <button
                 onClick={closeModal}
-                className="p-1 hover:bg-gray-800/60 rounded transition-colors"
+                className="p-1 hover:bg-secondary/60 rounded transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -330,58 +339,58 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block mb-2 font-medium text-gray-200">First Name</label>
+                  <label className="block mb-2 font-medium text-foreground">First Name</label>
                   <input
                     type="text"
                     value={formData.first_name}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                    className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                     placeholder="John"
                   />
                 </div>
                 <div>
-                  <label className="block mb-2 font-medium text-gray-200">Last Name</label>
+                  <label className="block mb-2 font-medium text-foreground">Last Name</label>
                   <input
                     type="text"
                     value={formData.last_name}
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                    className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                     placeholder="Doe"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Email *</label>
+                <label className="block mb-2 font-medium text-foreground">Email *</label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                   placeholder="john@company.com"
                 />
               </div>
 
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Phone</label>
+                <label className="block mb-2 font-medium text-foreground">Phone</label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 placeholder-gray-500 transition-colors"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground placeholder-muted-foreground transition-colors"
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
 
               {isSuperAdmin && (
                 <div>
-                  <label className="block mb-2 font-medium text-gray-200">Company *</label>
+                  <label className="block mb-2 font-medium text-foreground">Company *</label>
                   <select
                     value={formData.company_id}
                     onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
                     required
-                    className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 transition-colors"
+                    className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground transition-colors"
                   >
                     <option value="">Select company...</option>
                     {companies.map((company) => (
@@ -394,12 +403,12 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
               )}
 
               <div>
-                <label className="block mb-2 font-medium text-gray-200">Role *</label>
+                <label className="block mb-2 font-medium text-foreground">Role *</label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as "admin" | "member" })}
                   required
-                  className="w-full bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 focus:border-blue-600/50 focus:bg-gray-800 outline-none text-gray-100 transition-colors"
+                  className="w-full bg-secondary/80 rounded-lg p-3 border border-border/50 focus:border-blue-600/50 focus:bg-secondary outline-none text-foreground transition-colors"
                 >
                   <option value="member">Member</option>
                   <option value="admin">Admin</option>
@@ -410,14 +419,14 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-700/80 hover:bg-blue-600 rounded-lg transition-colors disabled:bg-gray-700/50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors disabled:bg-secondary/50 disabled:cursor-not-allowed"
                   disabled={loading}
                 >
                   {loading ? "Saving..." : editingUser ? "Update" : "Create"}
@@ -426,6 +435,16 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
             </form>
           </div>
         </div>
+      )}
+
+      {/* Project Assignment Modal */}
+      {assigningProjectsUser && (
+        <UserProjectAssignment
+          userId={assigningProjectsUser.id}
+          userName={`${assigningProjectsUser.first_name} ${assigningProjectsUser.last_name}`.trim() || assigningProjectsUser.email}
+          companyId={assigningProjectsUser.company_id}
+          onClose={() => setAssigningProjectsUser(null)}
+        />
       )}
     </div>
   );

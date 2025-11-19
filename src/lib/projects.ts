@@ -172,17 +172,13 @@ export async function addProject(
   url: string,
   description?: string
 ): Promise<Project> {
-  const newProject: Project = {
-    id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    companyId,
+  // Let the database generate the UUID and timestamps
+  const row = {
+    company_id: companyId,
     title,
     url,
-    description,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    description: description || null,
   };
-
-  const row = projectToRow(newProject);
 
   const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
