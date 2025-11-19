@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUsersByCompany, createUser } from '@/lib/users';
 import { getCompanyById } from '@/lib/companies';
 import { requireCompanyAccess, requireCompanyAdmin, getCurrentUser } from '@/lib/permissions';
-import { sendInvitationEmail } from '@/lib/invitations';
+import { sendInvitationEmail } from "@/lib/invitations-server";
 import { clerkClient } from '@clerk/nextjs/server';
 
 export async function GET(

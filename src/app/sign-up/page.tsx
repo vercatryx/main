@@ -2,11 +2,11 @@
 
 import { SignUp } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { verifyInvitationToken } from "@/lib/invitations";
 import { useTheme } from "@/contexts/theme-context";
 
-export default function SignUpPage() {
+function SignUpContent() {
   const searchParams = useSearchParams();
   const invitationToken = searchParams.get('invitation');
   const { theme } = useTheme();
@@ -115,5 +115,19 @@ export default function SignUpPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    }>
+      <SignUpContent />
+    </Suspense>
   );
 }

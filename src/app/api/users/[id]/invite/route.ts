@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserById, updateUser } from '@/lib/users';
 import { getCompanyById } from '@/lib/companies';
-import { sendInvitationEmail } from '@/lib/invitations';
+import { sendInvitationEmail } from "@/lib/invitations-server";
 import { canManageUser, getCurrentUser } from '@/lib/permissions';
 import { clerkClient } from '@clerk/nextjs/server';
 
