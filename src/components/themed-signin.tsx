@@ -31,7 +31,7 @@ export function ThemedSignIn({ path, redirectUrl, fallbackRedirectUrl }: ThemedS
           headerTitle: isLightMode ? "text-gray-900" : "text-gray-100",
           headerSubtitle: isLightMode ? "text-gray-600" : "text-gray-400",
           formButtonPrimary: "bg-red-500 hover:bg-red-600",
-          footerActionLink: "text-red-500 hover:text-red-600",
+          footer: "hidden",
         },
       }}
     />

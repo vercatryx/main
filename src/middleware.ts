@@ -24,17 +24,34 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.redirect(new URL(url.pathname, `${req.nextUrl.protocol}//${mainDomain}`));
     }
 
-    // If on subdomain root, redirect to /clients
+    // Protect /clients route on subdomain - redirect to sign-in on main domain if not authenticated
+    // Use Clerk's protect method which handles authentication properly
+    if (url.pathname === "/" || url.pathname === "/clients" || url.pathname.startsWith("/clients/")) {
+      const mainDomain = hostname.replace("clients.", "");
+      const signInUrl = new URL("/sign-in", `${req.nextUrl.protocol}//${mainDomain}`);
+      // Add return URL so user comes back to subdomain after signing in
+      signInUrl.searchParams.set("redirect_url", req.url);
+      
+      await auth.protect({
+        unauthenticatedUrl: signInUrl.toString(),
+        unauthorizedUrl: signInUrl.toString(),
+      });
+    }
+
+    // If on subdomain root, rewrite to /clients
     if (url.pathname === "/") {
       return NextResponse.rewrite(new URL("/clients", req.url));
     }
 
-    // For other paths on subdomain, keep the URL but rewrite to /clients path
-    if (!url.pathname.startsWith("/clients")) {
-      const newUrl = new URL(`/clients${url.pathname}`, req.url);
-      newUrl.search = url.search;
-      return NextResponse.rewrite(newUrl);
+    // If already on /clients path, allow it to pass through
+    if (url.pathname === "/clients" || url.pathname.startsWith("/clients/")) {
+      return NextResponse.next();
     }
+
+    // For other paths on subdomain, rewrite to /clients path
+    const newUrl = new URL(`/clients${url.pathname}`, req.url);
+    newUrl.search = url.search;
+    return NextResponse.rewrite(newUrl);
   }
 
   // Protect non-public routes and redirect to sign-in if not authenticated

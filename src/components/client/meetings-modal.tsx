@@ -446,7 +446,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       {/* Create Meeting Dialog */}
       {isAdmin && users && (
         <Dialog open={showCreateModal} onOpenChange={closeCreateModal}>
-          <DialogContent className="bg-background/95 border-border/50 text-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <DialogHeader>
               <DialogTitle className="text-foreground">Create New Meeting</DialogTitle>
               <DialogDescription className="text-muted-foreground">

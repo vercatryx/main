@@ -25,6 +25,33 @@ export default function RootLayout({
     >
       <html lang="en" suppressHydrationWarning>
         <body>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  try {
+                    // Default to dark mode until theme is determined
+                    const savedTheme = localStorage.getItem('theme');
+                    const theme = savedTheme && ['light', 'dark'].includes(savedTheme) ? savedTheme : 'dark';
+                    
+                    // Apply dark mode immediately to prevent flash
+                    if (theme === 'dark') {
+                      document.documentElement.classList.add('dark');
+                    } else {
+                      document.documentElement.classList.remove('dark');
+                    }
+                    
+                    // Set dark background on body immediately
+                    document.documentElement.style.backgroundColor = theme === 'dark' ? '#171717' : '#ffffff';
+                  } catch (e) {
+                    // Fallback to dark mode if localStorage fails
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.style.backgroundColor = '#171717';
+                  }
+                })();
+              `,
+            }}
+          />
           <ThemeRegistry />
           <ThemeProvider>{children}</ThemeProvider>
         </body>

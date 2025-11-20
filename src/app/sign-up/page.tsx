@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { verifyInvitationToken } from "@/lib/invitations";
 import { useTheme } from "@/contexts/theme-context";
+import { getClientsUrl } from "@/lib/clients-url";
 
 function SignUpContent() {
   const searchParams = useSearchParams();
@@ -98,8 +99,8 @@ function SignUpContent() {
               footerActionLink: "text-blue-500 hover:text-blue-600",
             },
           }}
-          forceRedirectUrl="/clients"
-          fallbackRedirectUrl="/clients"
+          forceRedirectUrl={getClientsUrl()}
+          fallbackRedirectUrl={getClientsUrl()}
           signInUrl="/sign-in"
           routing="path"
           path="/sign-up"

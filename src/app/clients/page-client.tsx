@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Video, Plus, MoreVertical, FileText, Play, Pause, Sun, Moon, Laptop, Square, Send, Calendar, ExternalLink } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
+import { getClientsPath } from "@/lib/clients-url";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,9 +143,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   );
 
   // For admins, prepend the admin project to the list
-  const currentProjects = adminProject
-    ? [adminProject, ...userProjects]
-    : userProjects;
+  const currentProjects = useMemo(() => 
+    adminProject
+      ? [adminProject, ...userProjects]
+      : userProjects,
+    [adminProject, userProjects]
+  );
 
   // Helper function to update URL
   const updateURL = useCallback((params: { chat?: string; chatState?: string; userId?: string; project?: string }) => {
@@ -179,7 +183,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       }
     }
 
-    router.replace(`/clients?${newParams.toString()}`, { scroll: false });
+    router.replace(`${getClientsPath()}?${newParams.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
   // Initialize state from URL params or defaults
@@ -404,7 +408,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       hasLoadedUnreadCountsForUserRef.current = null;
       setIsLoadingUnreadCounts(true);
     }
-  }, [calculateUnreadCounts, clerkUser?.id, userProjects]);
+  }, [calculateUnreadCounts, clerkUser?.id]);
 
   // Mark messages as read when chat is opened
   useEffect(() => {

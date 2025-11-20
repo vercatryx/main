@@ -7,8 +7,8 @@ export default function LogoWineFill({
     duration = 8,
     hold = 0.04,
     easing = "ease-in-out",
-    color = "var(--loading-fill)",         // ← red fill color
-    baseColor = "var(--loading-base)",     // ← background fill color
+    color = "var(--loading-fill, #dc2626)",         // ← red fill color (dark mode default)
+    baseColor = "var(--loading-base, #262626)",     // ← background fill color (dark mode default)
     outlineColor = "#ffffff",  // ← stroke outline
     strokeWidth = 6,
     className = ""
