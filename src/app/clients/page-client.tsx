@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Video, Plus, MoreVertical, FileText, Play, Pause, Sun, Moon, Laptop, Square, Send, Calendar, ExternalLink } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
-import { getClientsPath } from "@/lib/clients-url";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -183,7 +182,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       }
     }
 
-    router.replace(`${getClientsPath()}?${newParams.toString()}`, { scroll: false });
+    router.replace(`/clients?${newParams.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
   // Initialize state from URL params or defaults

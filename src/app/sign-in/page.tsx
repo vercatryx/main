@@ -4,33 +4,23 @@ import { SignIn, useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
 import { Home } from "lucide-react";
-import { useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import LogoWineFill from "@/components/loading";
 import { useTheme } from "@/contexts/theme-context";
-import { getClientsPath, getClientsUrl } from "@/lib/clients-url";
 
-function SignInContent() {
+export default function SignInPage() {
   const { isSignedIn, isLoaded } = useUser();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { theme } = useTheme();
   const isLightMode = theme === 'light';
-  
-  // Check if there's a redirect URL from subdomain
-  const redirectUrl = searchParams.get('redirect_url');
-  const clientsUrl = redirectUrl || getClientsUrl();
 
   useEffect(() => {
     // If user is already signed in when page loads, redirect immediately
     if (isLoaded && isSignedIn) {
-      if (redirectUrl) {
-        window.location.href = redirectUrl;
-      } else {
-        router.push(getClientsPath());
-      }
+      router.push("/clients");
     }
-  }, [isLoaded, isSignedIn, router, redirectUrl]);
+  }, [isLoaded, isSignedIn, router]);
 
   // Show loader while Clerk is loading or when user is signed in (Clerk modal has closed)
   if (!isLoaded || (isLoaded && isSignedIn)) {
@@ -90,16 +80,15 @@ function SignInContent() {
               },
               elements: {
                 card: isLightMode ? "bg-white border border-gray-200" : "bg-gray-900 border border-gray-700",
-                headerTitle: isLightMode ? "text-gray-900" : "text-gray-100",
-                headerSubtitle: isLightMode ? "text-gray-600" : "text-gray-400",
+                header: "hidden",
                 formButtonPrimary: "bg-red-500 hover:bg-red-600",
                 footer: "hidden",
                 rootBox: "w-full flex justify-center",
                 cardBox: "w-full",
               },
             }}
-            redirectUrl={clientsUrl}
-            fallbackRedirectUrl={clientsUrl}
+          redirectUrl="/clients"
+          fallbackRedirectUrl="/clients"
           />
         </div>
 
@@ -127,20 +116,5 @@ function SignInContent() {
         </div>
       </div>
     </main>
-  );
-}
-
-export default function SignInPage() {
-  return (
-    <Suspense fallback={
-      <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-        <div className="text-center">
-          <LogoWineFill width={300} duration={10} />
-          <p className="mt-6 text-muted-foreground text-lg">Loading...</p>
-        </div>
-      </main>
-    }>
-      <SignInContent />
-    </Suspense>
   );
 }

@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { getClientsPath } from "@/lib/clients-url";
 
 export function Navigation() {
   return (
@@ -14,7 +13,7 @@ export function Navigation() {
             <Image src="/logo-small-white.svg" alt="Vercatryx" width={40} height={40} />
           </div>
           <div className="flex items-center gap-4">
-            <Link href={getClientsPath()} className="text-foreground hover:text-muted-foreground transition-colors text-lg">
+            <Link href="/clients" className="text-foreground hover:text-muted-foreground transition-colors text-lg">
               Clients
             </Link>
             <Link href="/contact" className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-500 transition-colors text-lg">

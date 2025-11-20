@@ -4,7 +4,6 @@ import { useUser } from "@clerk/nextjs";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import LogoWineFill from "@/components/loading";
-import { getClientsPath } from "@/lib/clients-url";
 
 export default function FactorTwoPage() {
   const { isSignedIn, isLoaded } = useUser();
@@ -13,7 +12,7 @@ export default function FactorTwoPage() {
   useEffect(() => {
     // Once user is signed in (2FA completed), redirect to clients page
     if (isLoaded && isSignedIn) {
-      router.push(getClientsPath());
+      router.push("/clients");
     }
   }, [isLoaded, isSignedIn, router]);
 

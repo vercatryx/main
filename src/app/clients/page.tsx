@@ -7,7 +7,6 @@ import { getCurrentUser, getUserWithCompany, getAllUsers } from "@/lib/users";
 import { getAllCompanies } from "@/lib/companies";
 import { isSuperAdmin } from "@/lib/permissions";
 import { getUserAccessibleProjects } from "@/lib/user-project-permissions";
-import { getClientsPath } from "@/lib/clients-url";
 import ClientPortal from "./page-client";
 import AccountSetupChecker from "@/components/account-setup-checker";
 import { ThemedSignIn } from "@/components/themed-signin";
@@ -16,8 +15,21 @@ export default async function ClientsPage() {
   const clerkUser = await currentUser();
 
   if (!clerkUser) {
-    // Redirect to sign-in page - middleware should handle this, but this is a fallback
-    redirect("/sign-in");
+    return (
+      <main className="min-h-screen bg-background text-foreground">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
+              Please Sign In
+            </h1>
+            <p className="text-lg text-muted-foreground mb-8">
+              You need to be logged in to access the client portal.
+            </p>
+            <ThemedSignIn path="/clients" />
+          </div>
+        </div>
+      </main>
+    );
   }
 
   // Check if user is super admin

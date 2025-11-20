@@ -28,8 +28,7 @@ export function ThemedSignIn({ path, redirectUrl, fallbackRedirectUrl }: ThemedS
         },
         elements: {
           card: isLightMode ? "bg-white border border-gray-200" : "bg-gray-900 border border-gray-700",
-          headerTitle: isLightMode ? "text-gray-900" : "text-gray-100",
-          headerSubtitle: isLightMode ? "text-gray-600" : "text-gray-400",
+          header: "hidden",
           formButtonPrimary: "bg-red-500 hover:bg-red-600",
           footer: "hidden",
         },

@@ -4,7 +4,6 @@ import { getCurrentUser, isSuperAdmin, getUserPermissions } from "@/lib/permissi
 import { getAllCompanies, getCompanyById, getCompanyStats } from "@/lib/companies";
 import { getAllUsers, getUsersByCompany } from "@/lib/users";
 import { getAllProjects, getCompanyProjects } from "@/lib/projects";
-import { getClientsPath } from "@/lib/clients-url";
 import AdminClientNew from "./page-client-new";
 
 async function AdminDashboard() {
@@ -16,7 +15,7 @@ async function AdminDashboard() {
 
   // Super admins don't need to be in the database
   if (!superAdmin && !currentUser) {
-    redirect(getClientsPath());
+    redirect("/clients");
   }
 
   // Get user permissions
