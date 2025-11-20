@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProjectMessages, addMessage } from '@/lib/chat';
+import { isUserIdSuperAdmin } from '@/lib/permissions';
 
 export async function GET(
   req: NextRequest,
@@ -34,9 +35,18 @@ export async function POST(
     return new Response('Message or attachments required', { status: 400 });
   }
 
+  // Check if the sender is a superuser - if so, use "Vercatryx" as the name
+  let displayName = userName || 'Anonymous';
+  if (userId) {
+    const isSuperUser = await isUserIdSuperAdmin(userId);
+    if (isSuperUser) {
+      displayName = 'Vercatryx';
+    }
+  }
+
   const newMessage = await addMessage(projectId, {
     userId: userId || 'anonymous',
-    userName: userName || 'Anonymous',
+    userName: displayName,
     message: message || '',
     ...(hasAttachments && { attachments }),
   });

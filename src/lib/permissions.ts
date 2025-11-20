@@ -19,6 +19,22 @@ export async function isSuperAdmin(): Promise<boolean> {
 }
 
 /**
+ * Check if a specific userId is a super admin (via Clerk role)
+ */
+export async function isUserIdSuperAdmin(userId: string): Promise<boolean> {
+  if (!userId) return false;
+
+  const client = await clerkClient();
+  try {
+    const user = await client.users.getUser(userId);
+    return user.publicMetadata?.role === 'superuser';
+  } catch (error) {
+    console.error('Error checking if user is super admin:', error);
+    return false;
+  }
+}
+
+/**
  * Get current authenticated user from database
  */
 export async function getCurrentUser(): Promise<User | null> {

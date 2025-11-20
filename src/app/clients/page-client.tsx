@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Maximize2, Minimize2, Menu, X, UserCircle, LogOut, Paperclip, File as FileIcon, Download, Image as ImageIcon, Trash2, Mic, Video, Plus, MoreVertical, FileText, Play, Pause, Sun, Moon, Laptop, Square, Send, Calendar, ExternalLink } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
@@ -16,6 +16,9 @@ import {
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import MeetingsModal from "@/components/client/meetings-modal";
 import LogoWineFill from "@/components/loading";
+import { getClientSupabaseClient } from "@/lib/supabase";
+import { getProjectMessagesClient, rowToMessage } from "@/lib/chat";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface Project {
   id: string;
@@ -213,6 +216,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const { user: clerkUser } = useUser();
   const { getToken } = useAuth();
   const hasInitialized = useRef(false);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const lastViewedTimestampsRef = useRef<Record<string, number>>({});
 
   // Initialize selected project from URL or default
   useEffect(() => {
@@ -294,57 +299,249 @@ export default function ClientPortal({ projects, userName, companyName, user, is
     return () => clearInterval(interval);
   }, []);
 
+  // Helper function to scroll to bottom
+  const scrollToBottom = useCallback(() => {
+    const container = chatContainerRef.current;
+    if (container) {
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 100);
+    }
+  }, []);
+
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (!container) return;
+    if (!container || messages.length === 0) return;
 
-    // Only auto-scroll if:
-    // 1. New messages were added (message count increased)
-    // 2. User is scrolled near the bottom (within 100px)
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-    const hasNewMessages = messages.length > previousMessageCountRef.current;
-
-    if (hasNewMessages && isNearBottom) {
-      container.scrollTop = container.scrollHeight;
-    }
+    // Always scroll to bottom when messages change
+    // Use requestAnimationFrame for smoother scrolling
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }, 50);
+    });
 
     previousMessageCountRef.current = messages.length;
   }, [messages]);
 
+  // Load last viewed timestamps from localStorage on mount
   useEffect(() => {
-    if (chatProjectId) {
-      const fetchMessages = async () => {
-        setIsLoadingMessages(true);
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('chat_last_viewed');
+      if (stored) {
         try {
-          const res = await fetch(`/api/chat/${chatProjectId}`, {
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-            },
-          });
-          const data = await res.json();
-          setMessages(data);
-        } catch (error) {
-          console.error('Error fetching messages:', error);
-        } finally {
-          setIsLoadingMessages(false);
+          lastViewedTimestampsRef.current = JSON.parse(stored);
+        } catch (e) {
+          console.error('Error parsing last viewed timestamps:', e);
         }
-      };
-
-      // Initial fetch
-      fetchMessages();
-
-      // Poll for new messages every 5 seconds when chat is open
-      const pollInterval = setInterval(() => {
-        if (chatState !== 'closed') {
-          fetchMessages();
-        }
-      }, 5000);
-
-      // Cleanup interval on unmount or when chatProjectId changes
-      return () => clearInterval(pollInterval);
+      }
     }
+  }, []);
+
+  // Calculate unread counts for all projects
+  const calculateUnreadCounts = useCallback(async () => {
+    if (!clerkUser?.id) return;
+
+    const supabase = getClientSupabaseClient();
+    const counts: Record<string, number> = {};
+
+    // Get unread counts for all projects
+    // Use userProjects instead of currentProjects to avoid admin-dashboard and get actual projects
+    const projectsToCheck = userProjects.length > 0 ? userProjects : currentProjects.filter(p => p.id !== 'admin-dashboard');
+    
+    for (const project of projectsToCheck) {
+      if (project.id === 'admin-dashboard') continue;
+
+      try {
+        const projectMessages = await getProjectMessagesClient(supabase, project.id);
+        const lastViewed = lastViewedTimestampsRef.current[project.id] || 0;
+        
+        // Count messages that are:
+        // 1. Not from the current user
+        // 2. Created after the last viewed timestamp
+        const unread = projectMessages.filter(
+          msg => msg.userId !== clerkUser.id && msg.timestamp > lastViewed
+        ).length;
+
+        if (unread > 0) {
+          counts[project.id] = unread;
+        }
+      } catch (error) {
+        console.error(`Error calculating unread count for project ${project.id}:`, error);
+      }
+    }
+
+    setUnreadCounts(counts);
+  }, [userProjects, currentProjects, clerkUser?.id]);
+
+  // Calculate unread counts when projects or user changes
+  useEffect(() => {
+    if (clerkUser?.id) {
+      calculateUnreadCounts();
+      // Also recalculate periodically
+      const interval = setInterval(calculateUnreadCounts, 10000); // Every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [calculateUnreadCounts, clerkUser?.id, userProjects]);
+
+  // Mark messages as read when chat is opened
+  useEffect(() => {
+    if (chatProjectId && chatState !== 'closed' && clerkUser?.id) {
+      // Mark all messages as read by updating last viewed timestamp
+      const now = Date.now();
+      lastViewedTimestampsRef.current[chatProjectId] = now;
+      
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('chat_last_viewed', JSON.stringify(lastViewedTimestampsRef.current));
+      }
+
+      // Update unread counts
+      setUnreadCounts(prev => {
+        const updated = { ...prev };
+        delete updated[chatProjectId];
+        return updated;
+      });
+    }
+  }, [chatProjectId, chatState, clerkUser?.id]);
+
+  useEffect(() => {
+    if (!chatProjectId) return;
+
+    const supabase = getClientSupabaseClient();
+    let channel: RealtimeChannel | null = null;
+    let pollFallback: NodeJS.Timeout | null = null;
+
+    const setupRealtimeSubscription = async () => {
+      setIsLoadingMessages(true);
+      
+      try {
+        // Initial fetch of messages
+        const initialMessages = await getProjectMessagesClient(supabase, chatProjectId);
+        setMessages(initialMessages);
+        setIsLoadingMessages(false);
+        // Scroll to bottom after initial load
+        setTimeout(() => {
+          scrollToBottom();
+        }, 200);
+
+        // Set up realtime subscription for new/updated/deleted messages
+        channel = supabase
+          .channel(`chat:${chatProjectId}`, {
+            config: {
+              broadcast: { self: false },
+            },
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*', // Listen to INSERT, UPDATE, DELETE
+              schema: 'public',
+              table: 'chat_messages',
+              filter: `project_id=eq.${chatProjectId}`,
+            },
+            async (payload) => {
+              console.log('Chat message change:', payload.eventType, payload);
+              
+              if (payload.eventType === 'INSERT') {
+                // New message added
+                const newMessage = rowToMessage(payload.new as any);
+                setMessages((prev) => {
+                  // Check if message already exists to avoid duplicates
+                  if (prev.some((msg) => msg.id === newMessage.id)) {
+                    return prev;
+                  }
+                  // Insert in sorted order by timestamp
+                  const updated = [...prev, newMessage].sort((a, b) => a.timestamp - b.timestamp);
+                  return updated;
+                });
+
+                // Update unread count if message is not from current user and chat is closed
+                if (newMessage.userId !== clerkUser?.id && chatState === 'closed' && chatProjectId) {
+                  const lastViewed = lastViewedTimestampsRef.current[chatProjectId] || 0;
+                  if (newMessage.timestamp > lastViewed) {
+                    setUnreadCounts(prev => ({
+                      ...prev,
+                      [chatProjectId]: (prev[chatProjectId] || 0) + 1
+                    }));
+                  }
+                }
+              } else if (payload.eventType === 'UPDATE') {
+                // Message updated
+                const updatedMessage = rowToMessage(payload.new as any);
+                setMessages((prev) =>
+                  prev.map((msg) => (msg.id === updatedMessage.id ? updatedMessage : msg))
+                );
+              } else if (payload.eventType === 'DELETE') {
+                // Message deleted
+                const deletedId = payload.old.id;
+                setMessages((prev) => prev.filter((msg) => msg.id !== deletedId));
+                
+                // Recalculate unread count for this project
+                if (chatState === 'closed' && chatProjectId) {
+                  calculateUnreadCounts();
+                }
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log('Subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Successfully subscribed to chat messages (realtime)');
+              // Clear any fallback polling if subscription is successful
+              if (pollFallback) {
+                clearInterval(pollFallback);
+                pollFallback = null;
+              }
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.warn('⚠️ Realtime subscription failed, falling back to polling');
+              // Fallback to polling if realtime fails
+              if (!pollFallback) {
+                pollFallback = setInterval(async () => {
+                  if (chatState !== 'closed') {
+                    try {
+                      const messages = await getProjectMessagesClient(supabase, chatProjectId);
+                      setMessages(messages);
+                    } catch (error) {
+                      console.error('Error fetching messages (fallback):', error);
+                    }
+                  }
+                }, 5000);
+              }
+            }
+          });
+      } catch (error) {
+        console.error('Error setting up chat subscription:', error);
+        setIsLoadingMessages(false);
+        // Fallback to polling on error
+        pollFallback = setInterval(async () => {
+          if (chatState !== 'closed') {
+            try {
+              const messages = await getProjectMessagesClient(supabase, chatProjectId);
+              setMessages(messages);
+            } catch (error) {
+              console.error('Error fetching messages (fallback):', error);
+            }
+          }
+        }, 5000);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup subscription and polling on unmount or when chatProjectId changes
+    return () => {
+      if (channel) {
+        console.log('Unsubscribing from chat channel');
+        supabase.removeChannel(channel);
+      }
+      if (pollFallback) {
+        clearInterval(pollFallback);
+      }
+    };
   }, [chatProjectId, chatState]);
 
   // Debug: Log when selectedProject changes
@@ -433,6 +630,20 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
   const getProjectForChat = () => currentProjects.find(p => p.id === chatProjectId);
 
+  // Helper function to find the index of the first unread message
+  const getFirstUnreadIndex = useCallback(() => {
+    if (!chatProjectId || !clerkUser?.id || messages.length === 0) return -1;
+    
+    const lastViewed = lastViewedTimestampsRef.current[chatProjectId] || 0;
+    
+    // Find the first message that is unread (not from current user and after last viewed)
+    const firstUnreadIndex = messages.findIndex(
+      msg => msg.userId !== clerkUser.id && msg.timestamp > lastViewed
+    );
+    
+    return firstUnreadIndex;
+  }, [messages, chatProjectId, clerkUser?.id]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setSelectedFiles(prev => [...prev, ...files]);
@@ -502,6 +713,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         setMessages((prev) => [...prev, newMessage]);
         input.value = '';
         setSelectedFiles([]);
+        // Scroll to bottom after sending message
+        scrollToBottom();
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -653,6 +866,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         setMessages((prev) => [...prev, newMessage]);
         setAudioBlob(null);
         setRecordingTime(0);
+        // Scroll to bottom after sending voice note
+        scrollToBottom();
       }
     } catch (error) {
       console.error('Error sending voice note:', error);
@@ -811,12 +1026,26 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             {/* Chat Content */}
             <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
               <div className="space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                      }`}
-                  >
+                {messages.map((msg, index) => {
+                  const firstUnreadIndex = getFirstUnreadIndex();
+                  const showSeparator = firstUnreadIndex >= 0 && index === firstUnreadIndex;
+                  
+                  return (
+                    <Fragment key={msg.id}>
+                      {showSeparator && (
+                        <div className="relative my-4">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-dashed border-muted-foreground/30"></div>
+                          </div>
+                          <div className="relative flex justify-center">
+                            <span className="bg-background px-2 text-xs text-muted-foreground">New messages</span>
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                          }`}
+                      >
                     <p className="text-xs text-muted-foreground mb-1 px-1">
                       {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                     </p>
@@ -913,7 +1142,9 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                       </p>
                     </div>
                   </div>
-                ))}
+                  </Fragment>
+                );
+                })}
               </div>
             </div>
             {/* Chat Input */}
@@ -1057,12 +1288,26 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             </div>
             <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
               <div className="space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                      }`}
-                  >
+                {messages.map((msg, index) => {
+                  const firstUnreadIndex = getFirstUnreadIndex();
+                  const showSeparator = firstUnreadIndex >= 0 && index === firstUnreadIndex;
+                  
+                  return (
+                    <Fragment key={msg.id}>
+                      {showSeparator && (
+                        <div className="relative my-4">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-dashed border-muted-foreground/30"></div>
+                          </div>
+                          <div className="relative flex justify-center">
+                            <span className="bg-background px-2 text-xs text-muted-foreground">New messages</span>
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                          }`}
+                      >
                     <p className="text-xs text-muted-foreground mb-1 px-1">
                       {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                     </p>
@@ -1159,7 +1404,9 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                       </p>
                     </div>
                   </div>
-                ))}
+                  </Fragment>
+                );
+                })}
               </div>
             </div>
             <div className="p-4 border-t border-border/50 bg-card/40">
@@ -1401,7 +1648,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                       console.log('🖱️ Project clicked:', project.title, project.id);
                       setSelectedProject(project);
                     }}
-                    className={`w-full text-left p-4 rounded-lg transition-colors ${selectedProject?.id === project.id
+                    className={`w-full text-left p-4 ${project.id !== 'admin-dashboard' && unreadCounts[project.id] > 0 ? 'pr-12' : ''} rounded-lg transition-colors ${selectedProject?.id === project.id
                       ? 'bg-brand-blue text-white'
                       : 'bg-card/80 hover:bg-secondary/80 text-foreground'
                       }`}
@@ -1413,10 +1660,11 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                       </p>
                     )}
                   </button>
-                  {selectedProject?.id === project.id && project.id !== 'admin-dashboard' && (
+                  {project.id !== 'admin-dashboard' && (
                     <button
                       onClick={() => {
-                        if (chatState === 'closed') {
+                        setSelectedProject(project);
+                        if (chatState === 'closed' || chatProjectId !== project.id) {
                           setChatState('sidebar');
                           setChatProjectId(project.id);
                         } else {
@@ -1424,13 +1672,22 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                           setChatProjectId(null);
                         }
                       }}
-                      className="absolute top-2 right-2 p-2 bg-secondary/80 rounded-full hover:bg-secondary transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-secondary/80 rounded-full hover:bg-secondary transition-colors z-10"
                     >
-                      {chatState === 'closed' ? (
-                        <MessageCircle className="w-4 h-4" />
-                      ) : (
-                        <X className="w-4 h-4" />
-                      )}
+                      <span className="relative inline-block">
+                        {chatState !== 'closed' && chatProjectId === project.id ? (
+                          <X className="w-4 h-4" />
+                        ) : (
+                          <>
+                            <MessageCircle className="w-4 h-4" />
+                            {unreadCounts[project.id] > 0 && (
+                              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1.5 shadow-lg border-2 border-background">
+                                {unreadCounts[project.id] > 99 ? '99+' : unreadCounts[project.id]}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </span>
                     </button>
                   )}
                 </div>
@@ -1525,12 +1782,26 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               </div>
               <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
                 <div className="space-y-4">
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
-                        }`}
-                    >
+                  {messages.map((msg, index) => {
+                    const firstUnreadIndex = getFirstUnreadIndex();
+                    const showSeparator = firstUnreadIndex >= 0 && index === firstUnreadIndex;
+                    
+                    return (
+                      <Fragment key={msg.id}>
+                        {showSeparator && (
+                          <div className="relative my-4">
+                            <div className="absolute inset-0 flex items-center">
+                              <div className="w-full border-t border-dashed border-muted-foreground/30"></div>
+                            </div>
+                            <div className="relative flex justify-center">
+                              <span className="bg-background px-2 text-xs text-muted-foreground">New messages</span>
+                            </div>
+                          </div>
+                        )}
+                        <div
+                          className={`flex flex-col ${msg.userId === clerkUser?.id ? 'items-end' : 'items-start'
+                            }`}
+                        >
                       <p className="text-xs text-muted-foreground mb-1 px-1">
                         {msg.userId === clerkUser?.id ? 'You' : (msg.userName || 'Vercatryx')}
                       </p>
@@ -1627,7 +1898,9 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                         </p>
                       </div>
                     </div>
-                  ))}
+                    </Fragment>
+                  );
+                  })}
                 </div>
               </div>
               <div className="p-4 border-t border-border/50 bg-card/40">

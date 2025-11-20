@@ -19,8 +19,8 @@ export const lightTheme = {
     input: '#ffffff',
     ring: '#737373',
     radius: '0.625rem',
-    brandBlue: '#60a5fa', // blue-400
-    brandBlueHover: '#3b82f6', // blue-500
+    brandBlue: '#93c5fd', // blue-300 - lighter for light mode
+    brandBlueHover: '#60a5fa', // blue-400
     loadingFill: '#60a5fa', // blue-400
     loadingBase: '#e6e6e6',
 };

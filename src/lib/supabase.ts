@@ -35,6 +35,21 @@ export function getServerSupabaseClient() {
 }
 
 /**
+ * Get a client-side Supabase client for use in React components
+ * This ensures the client is properly initialized in the browser
+ */
+export function getClientSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey);
+}
+
+/**
  * Test Supabase connection
  */
 export async function testSupabaseConnection() {

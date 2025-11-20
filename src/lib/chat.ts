@@ -1,6 +1,7 @@
-import { supabase } from './supabase';
+import { getServerSupabaseClient } from './supabase';
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from './r2';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface ChatAttachment {
   type: 'image' | 'file' | 'voice';
@@ -53,7 +54,7 @@ function messageToRow(projectId: string, message: ChatMessage): Partial<ChatMess
 /**
  * Convert database row to ChatMessage
  */
-function rowToMessage(row: ChatMessageRow): ChatMessage {
+export function rowToMessage(row: ChatMessageRow): ChatMessage {
   const content = JSON.parse(row.content);
   return {
     id: row.id,
@@ -66,10 +67,33 @@ function rowToMessage(row: ChatMessageRow): ChatMessage {
 }
 
 /**
- * Get all chat messages for a project
+ * Get all chat messages for a project (server-side)
  */
 export async function getProjectMessages(projectId: string): Promise<ChatMessage[]> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching chat messages:', error);
+    return [];
+  }
+
+  return (data || []).map(rowToMessage);
+}
+
+/**
+ * Get all chat messages for a project (client-side)
+ * Use this in React components with a client Supabase instance
+ */
+export async function getProjectMessagesClient(
+  client: SupabaseClient,
+  projectId: string
+): Promise<ChatMessage[]> {
+  const { data, error } = await client
     .from('chat_messages')
     .select('*')
     .eq('project_id', projectId)
@@ -90,6 +114,7 @@ export async function addMessage(
   projectId: string,
   message: Omit<ChatMessage, 'id' | 'timestamp'>
 ): Promise<ChatMessage> {
+  const supabase = getServerSupabaseClient();
   const timestamp = Date.now();
 
   // Let the database generate the UUID
@@ -127,6 +152,7 @@ export async function updateProjectMessages(
   projectId: string,
   messages: ChatMessage[]
 ): Promise<void> {
+  const supabase = getServerSupabaseClient();
   // Delete all existing messages for the project
   const { error: deleteError } = await supabase
     .from('chat_messages')
@@ -168,6 +194,7 @@ export async function updateProjectMessages(
  * Delete a specific message
  */
 export async function deleteMessage(messageId: string): Promise<boolean> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('chat_messages')
     .delete()
@@ -179,6 +206,22 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * Sanitize filename for use in HTTP headers (S3 metadata)
+ * Uses URL-safe base64 encoding to ensure the value is safe for HTTP headers
+ * The original filename is preserved in the ChatAttachment object
+ */
+function sanitizeFilenameForHeader(filename: string): string {
+  // Encode the filename as URL-safe base64 (base64url) to ensure it's safe for HTTP headers
+  // Base64url uses A-Z, a-z, 0-9, -, _ (no padding, no + or /)
+  const base64 = Buffer.from(filename, 'utf-8').toString('base64');
+  // Convert standard base64 to URL-safe base64url
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, ''); // Remove padding
 }
 
 /**
@@ -214,7 +257,7 @@ export async function uploadChatFile(
     ContentType: file.type,
     ContentLength: file.size,
     Metadata: {
-      'original-filename': file.name,
+      'original-filename': sanitizeFilenameForHeader(file.name),
       'project-id': projectId,
       'message-id': messageId,
       'attachment-type': attachmentType,
