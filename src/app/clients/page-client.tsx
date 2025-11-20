@@ -217,7 +217,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const { getToken } = useAuth();
   const hasInitialized = useRef(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [isLoadingUnreadCounts, setIsLoadingUnreadCounts] = useState(true);
   const lastViewedTimestampsRef = useRef<Record<string, number>>({});
+  const openingTimestampRef = useRef<Record<string, number>>({});
+  const hasLoadedUnreadCountsForUserRef = useRef<string | null>(null);
 
   // Initialize selected project from URL or default
   useEffect(() => {
@@ -345,6 +348,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const calculateUnreadCounts = useCallback(async () => {
     if (!clerkUser?.id) return;
 
+    // Only show loading on the very first load for this user
+    const isInitialLoad = hasLoadedUnreadCountsForUserRef.current !== clerkUser.id;
+    if (isInitialLoad) {
+      setIsLoadingUnreadCounts(true);
+    }
+
     const supabase = getClientSupabaseClient();
     const counts: Record<string, number> = {};
 
@@ -375,21 +384,35 @@ export default function ClientPortal({ projects, userName, companyName, user, is
     }
 
     setUnreadCounts(counts);
+    
+    // Mark as loaded for this user and hide loading spinner after first load
+    if (isInitialLoad) {
+      hasLoadedUnreadCountsForUserRef.current = clerkUser.id;
+      setIsLoadingUnreadCounts(false);
+    }
   }, [userProjects, currentProjects, clerkUser?.id]);
 
   // Calculate unread counts when projects or user changes
   useEffect(() => {
     if (clerkUser?.id) {
       calculateUnreadCounts();
-      // Also recalculate periodically
-      const interval = setInterval(calculateUnreadCounts, 10000); // Every 10 seconds
+      // Also recalculate periodically (without loading indicator)
+      const interval = setInterval(() => calculateUnreadCounts(), 10000); // Every 10 seconds
       return () => clearInterval(interval);
+    } else {
+      // Reset when user logs out
+      hasLoadedUnreadCountsForUserRef.current = null;
+      setIsLoadingUnreadCounts(true);
     }
   }, [calculateUnreadCounts, clerkUser?.id, userProjects]);
 
   // Mark messages as read when chat is opened
   useEffect(() => {
     if (chatProjectId && chatState !== 'closed' && clerkUser?.id) {
+      // Store the previous last viewed timestamp before updating it
+      // This allows us to show the "New messages" separator for messages received before opening
+      openingTimestampRef.current[chatProjectId] = lastViewedTimestampsRef.current[chatProjectId] || 0;
+      
       // Mark all messages as read by updating last viewed timestamp
       const now = Date.now();
       lastViewedTimestampsRef.current[chatProjectId] = now;
@@ -417,6 +440,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
     const setupRealtimeSubscription = async () => {
       setIsLoadingMessages(true);
+      setMessages([]); // Clear previous messages when switching chats
       
       try {
         // Initial fetch of messages
@@ -634,7 +658,9 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const getFirstUnreadIndex = useCallback(() => {
     if (!chatProjectId || !clerkUser?.id || messages.length === 0) return -1;
     
-    const lastViewed = lastViewedTimestampsRef.current[chatProjectId] || 0;
+    // Use the opening timestamp (when chat was opened) to determine unread messages
+    // This ensures we show the separator for messages received before opening the chat
+    const lastViewed = openingTimestampRef.current[chatProjectId] ?? (lastViewedTimestampsRef.current[chatProjectId] || 0);
     
     // Find the first message that is unread (not from current user and after last viewed)
     const firstUnreadIndex = messages.findIndex(
@@ -1025,8 +1051,16 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             </div>
             {/* Chat Content */}
             <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
-              <div className="space-y-4">
-                {messages.map((msg, index) => {
+              {isLoadingMessages ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-sm text-muted-foreground">Loading messages...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((msg, index) => {
                   const firstUnreadIndex = getFirstUnreadIndex();
                   const showSeparator = firstUnreadIndex >= 0 && index === firstUnreadIndex;
                   
@@ -1145,7 +1179,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   </Fragment>
                 );
                 })}
-              </div>
+                </div>
+              )}
             </div>
             {/* Chat Input */}
             <div className="p-4 border-t border-border bg-card/40">
@@ -1287,8 +1322,16 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               </div>
             </div>
             <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
-              <div className="space-y-4">
-                {messages.map((msg, index) => {
+              {isLoadingMessages ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-sm text-muted-foreground">Loading messages...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((msg, index) => {
                   const firstUnreadIndex = getFirstUnreadIndex();
                   const showSeparator = firstUnreadIndex >= 0 && index === firstUnreadIndex;
                   
@@ -1407,7 +1450,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                   </Fragment>
                 );
                 })}
-              </div>
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-border/50 bg-card/40">
               {selectedFiles.length > 0 && (
@@ -1679,11 +1723,17 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                           <X className="w-4 h-4" />
                         ) : (
                           <>
-                            <MessageCircle className="w-4 h-4" />
-                            {unreadCounts[project.id] > 0 && (
-                              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1.5 shadow-lg border-2 border-background">
-                                {unreadCounts[project.id] > 99 ? '99+' : unreadCounts[project.id]}
-                              </span>
+                            {isLoadingUnreadCounts ? (
+                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
+                                <MessageCircle className="w-4 h-4" />
+                                {unreadCounts[project.id] > 0 && (
+                                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1.5 shadow-lg border-2 border-background">
+                                    {unreadCounts[project.id] > 99 ? '99+' : unreadCounts[project.id]}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </>
                         )}

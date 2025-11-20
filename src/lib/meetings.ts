@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getServerSupabaseClient } from './supabase';
 
 export interface Meeting {
   id: string;
@@ -97,6 +97,7 @@ function meetingToRow(meeting: Partial<Meeting>): Partial<MeetingRow> {
  * Create a new meeting
  */
 export async function createMeeting(meeting: Meeting): Promise<Meeting> {
+  const supabase = getServerSupabaseClient();
   const row = meetingToRow(meeting);
 
   const { data, error } = await supabase
@@ -117,6 +118,7 @@ export async function createMeeting(meeting: Meeting): Promise<Meeting> {
  * Get a meeting by ID
  */
 export async function getMeeting(id: string): Promise<Meeting | null> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('meetings')
     .select('*')
@@ -138,6 +140,7 @@ export async function getMeeting(id: string): Promise<Meeting | null> {
  * Get all meetings for a specific user (either as host or participant)
  */
 export async function getUserMeetings(userId: string): Promise<Meeting[]> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('meetings')
     .select('*')
@@ -159,6 +162,7 @@ export async function getUserMeetings(userId: string): Promise<Meeting[]> {
  * - Meetings that started up to 3 hours ago
  */
 export async function getUpcomingMeetings(userId: string): Promise<Meeting[]> {
+  const supabase = getServerSupabaseClient();
   const now = new Date();
   // Calculate the cutoff time: meetings that started more than 3 hours ago won't be shown
   const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -193,6 +197,7 @@ export async function getUpcomingMeetings(userId: string): Promise<Meeting[]> {
  * Get all meetings (admin only)
  */
 export async function getAllMeetingsList(): Promise<Meeting[]> {
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase
     .from('meetings')
     .select('*')
@@ -214,6 +219,7 @@ export async function updateMeetingStatus(
   status: Meeting['status'],
   additionalData?: { startedAt?: string; endedAt?: string }
 ): Promise<Meeting | null> {
+  const supabase = getServerSupabaseClient();
   const updates: Partial<MeetingRow> = {
     status,
     updated_at: new Date().toISOString(),
@@ -248,6 +254,7 @@ export async function updateMeeting(
   id: string,
   updates: Partial<Omit<Meeting, 'id' | 'createdAt'>>
 ): Promise<Meeting | null> {
+  const supabase = getServerSupabaseClient();
   const row = meetingToRow(updates);
   row.updated_at = new Date().toISOString();
 
@@ -270,6 +277,7 @@ export async function updateMeeting(
  * Delete a meeting
  */
 export async function deleteMeeting(id: string): Promise<boolean> {
+  const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('meetings')
     .delete()
