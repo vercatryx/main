@@ -62,6 +62,29 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 /**
+ * Get user by email and company ID
+ */
+export async function getUserByEmailAndCompany(email: string, companyId: string): Promise<User | null> {
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Get the currently logged-in user from the database
  */
 export async function getCurrentUser(): Promise<User | null> {
@@ -223,13 +246,13 @@ export async function updateUser(userId: string, input: UpdateUserInput): Promis
 }
 
 /**
- * Delete a user (soft delete by setting is_active to false)
+ * Delete a user (hard delete - permanently removes from database)
  */
 export async function deleteUser(userId: string): Promise<void> {
   const supabase = getServerSupabaseClient();
   const { error } = await supabase
     .from('users')
-    .update({ is_active: false })
+    .delete()
     .eq('id', userId);
 
   if (error) {

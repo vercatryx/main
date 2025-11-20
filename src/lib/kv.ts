@@ -64,17 +64,21 @@ function requestToRow(request: Partial<AvailabilityRequest>): Partial<Availabili
 /**
  * Save an availability request to the database
  */
-export async function saveAvailabilityRequest(request: AvailabilityRequest): Promise<void> {
+export async function saveAvailabilityRequest(request: AvailabilityRequest): Promise<AvailabilityRequest> {
   const row = requestToRow(request);
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('availability_requests')
-    .insert(row);
+    .insert(row)
+    .select()
+    .single();
 
   if (error) {
     console.error('Error saving availability request:', error);
     throw new Error(`Failed to save availability request: ${error.message}`);
   }
+
+  return rowToRequest(data as AvailabilityRequestRow);
 }
 
 /**

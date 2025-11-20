@@ -17,9 +17,10 @@ interface Company {
 
 interface CompaniesManagementProps {
   initialCompanies: Company[];
+  onDataChange?: () => void;
 }
 
-export default function CompaniesManagement({ initialCompanies }: CompaniesManagementProps) {
+export default function CompaniesManagement({ initialCompanies, onDataChange }: CompaniesManagementProps) {
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [showModal, setShowModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -60,6 +61,7 @@ export default function CompaniesManagement({ initialCompanies }: CompaniesManag
         if (res.ok) {
           const updated = await res.json();
           setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
+          onDataChange?.();
         } else {
           alert("Failed to update company");
         }
@@ -74,6 +76,7 @@ export default function CompaniesManagement({ initialCompanies }: CompaniesManag
         if (res.ok) {
           const newCompany = await res.json();
           setCompanies(prev => [...prev, { ...newCompany, stats: { users: 0, projects: 0, meetings: 0 } }]);
+          onDataChange?.();
         } else {
           alert("Failed to create company");
         }
@@ -102,6 +105,7 @@ export default function CompaniesManagement({ initialCompanies }: CompaniesManag
 
       if (res.ok) {
         setCompanies(prev => prev.filter(c => c.id !== companyId));
+        onDataChange?.();
       } else {
         alert("Failed to delete company");
       }

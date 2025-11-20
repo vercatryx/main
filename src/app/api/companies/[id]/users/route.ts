@@ -55,6 +55,20 @@ export async function POST(
       );
     }
 
+    // Check if user already exists in this company
+    const { getUserByEmailAndCompany } = await import('@/lib/users');
+    const existingUser = await getUserByEmailAndCompany(body.email, id);
+
+    if (existingUser) {
+      return NextResponse.json(
+        {
+          error: 'User with this email already exists in this company',
+          user: existingUser
+        },
+        { status: 409 } // 409 Conflict
+      );
+    }
+
     // Check if email already has a Clerk account
     let clerkUserId: string | null = null;
     let userStatus: 'pending' | 'active' = 'pending';
@@ -92,6 +106,7 @@ export async function POST(
       role: body.role,
       status: userStatus, // 'active' if Clerk account exists, 'pending' otherwise
       clerk_user_id: clerkUserId, // Link to Clerk account if it exists
+      all_projects_access: true, // Default: grant access to all projects
     });
 
     // Send invitation email only if user doesn't have Clerk account

@@ -23,6 +23,7 @@ interface ProjectsManagementProps {
   companies: Company[];
   isSuperAdmin: boolean;
   currentCompanyId: string | null;
+  onDataChange?: () => void;
 }
 
 export default function ProjectsManagementNew({
@@ -30,6 +31,7 @@ export default function ProjectsManagementNew({
   companies,
   isSuperAdmin,
   currentCompanyId,
+  onDataChange,
 }: ProjectsManagementProps) {
   const [projects, setProjects] = useState<ProjectWithCompany[]>(initialProjects);
   const [showModal, setShowModal] = useState(false);
@@ -86,6 +88,7 @@ export default function ProjectsManagementNew({
           const { project } = await res.json();
           const company = companies.find(c => c.id === project.companyId);
           setProjects(prev => prev.map(p => p.id === project.id ? { ...project, company } : p));
+          onDataChange?.();
         } else {
           alert("Failed to update project");
         }
@@ -104,6 +107,7 @@ export default function ProjectsManagementNew({
           const { project } = await res.json();
           const company = companies.find(c => c.id === project.companyId);
           setProjects(prev => [...prev, { ...project, company }]);
+          onDataChange?.();
         } else {
           alert("Failed to create project");
         }
@@ -132,6 +136,7 @@ export default function ProjectsManagementNew({
 
       if (res.ok) {
         setProjects(prev => prev.filter(p => p.id !== projectId));
+        onDataChange?.();
       } else {
         alert("Failed to delete project");
       }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Users, FolderOpen, LogOut } from "lucide-react";
+import { Building2, Users, FolderOpen, LogOut, RefreshCw } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 import CompaniesManagement from "@/components/admin/companies-management";
 import UsersManagementNew from "@/components/admin/users-management-new";
@@ -43,16 +43,28 @@ export default function AdminClientNew({
   isSuperAdmin,
 }: AdminClientNewProps) {
   const [activeTab, setActiveTab] = useState<TabType>(isSuperAdmin ? "companies" : "users");
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refresh all data by reloading the page
+  const handleRefresh = () => {
+    setRefreshing(true);
+    window.location.reload();
+  };
+
+  // Callback for when data changes (create/edit operations)
+  const handleDataChange = () => {
+    handleRefresh();
+  };
 
   // Convert projects to flat array with company info
   const projectsArray: Project[] = Array.isArray(initialProjects)
     ? initialProjects
     : Object.entries(initialProjects).flatMap(([companyId, projects]) =>
-        projects.map((project) => ({
-          ...project,
-          company: companies.find((c) => c.id === companyId),
-        }))
-      );
+      projects.map((project) => ({
+        ...project,
+        company: companies.find((c) => c.id === companyId),
+      }))
+    );
 
   return (
     <div className="min-h-screen">
@@ -65,12 +77,23 @@ export default function AdminClientNew({
               {isSuperAdmin ? "Super Admin" : "Company Admin"} - {userEmail}
             </p>
           </div>
-          <SignOutButton redirectUrl="/sign-in">
-            <button className="flex items-center gap-2 px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors">
-              <LogOut className="w-4 h-4" />
-              Sign Out
+          <div className="flex gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh all data"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
-          </SignOutButton>
+            <SignOutButton redirectUrl="/sign-in">
+              <button className="flex items-center gap-2 px-4 py-2 bg-secondary/80 hover:bg-secondary rounded-lg transition-colors">
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </SignOutButton>
+          </div>
         </div>
       </div>
 
@@ -80,11 +103,10 @@ export default function AdminClientNew({
           {isSuperAdmin && (
             <button
               onClick={() => setActiveTab("companies")}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-                activeTab === "companies"
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${activeTab === "companies"
                   ? "border-blue-600 text-blue-400"
                   : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               <Building2 className="w-5 h-5" />
               Companies
@@ -95,11 +117,10 @@ export default function AdminClientNew({
           )}
           <button
             onClick={() => setActiveTab("users")}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-              activeTab === "users"
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${activeTab === "users"
                 ? "border-blue-600 text-blue-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             <Users className="w-5 h-5" />
             Users
@@ -110,11 +131,10 @@ export default function AdminClientNew({
           {isSuperAdmin && (
             <button
               onClick={() => setActiveTab("projects")}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-                activeTab === "projects"
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${activeTab === "projects"
                   ? "border-blue-600 text-blue-400"
                   : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               <FolderOpen className="w-5 h-5" />
               Projects
@@ -129,7 +149,7 @@ export default function AdminClientNew({
       {/* Tab Content */}
       <div className="pb-12">
         {activeTab === "companies" && isSuperAdmin && (
-          <CompaniesManagement initialCompanies={companies} />
+          <CompaniesManagement initialCompanies={companies} onDataChange={handleDataChange} />
         )}
 
         {activeTab === "users" && (
@@ -137,6 +157,7 @@ export default function AdminClientNew({
             initialUsers={initialUsers}
             companies={companies}
             isSuperAdmin={isSuperAdmin}
+            onDataChange={handleDataChange}
           />
         )}
 
@@ -146,6 +167,7 @@ export default function AdminClientNew({
             companies={companies}
             isSuperAdmin={isSuperAdmin}
             currentCompanyId={currentUser?.company_id || null}
+            onDataChange={handleDataChange}
           />
         )}
       </div>

@@ -13,9 +13,10 @@ interface UsersManagementProps {
   initialUsers: UserWithCompany[];
   companies: Company[];
   isSuperAdmin: boolean;
+  onDataChange?: () => void;
 }
 
-export default function UsersManagementNew({ initialUsers, companies, isSuperAdmin }: UsersManagementProps) {
+export default function UsersManagementNew({ initialUsers, companies, isSuperAdmin, onDataChange }: UsersManagementProps) {
   const [users, setUsers] = useState<UserWithCompany[]>(initialUsers);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithCompany | null>(null);
@@ -81,6 +82,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
           const company = await companyRes.json();
 
           setUsers(prev => prev.map(u => u.id === updated.id ? { ...updated, company } : u));
+          onDataChange?.(); // Trigger page refresh
         } else {
           alert("Failed to update user");
         }
@@ -96,6 +98,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
           const response = await res.json();
           const company = companies.find(c => c.id === formData.company_id);
           setUsers(prev => [...prev, { ...response, company: company! }]);
+          onDataChange?.(); // Trigger page refresh
 
           // Show different message based on whether user was linked or invited
           if (response.message) {
@@ -116,7 +119,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
   };
 
   const handleDelete = async (userId: string) => {
-    if (!confirm("Are you sure you want to deactivate this user?")) {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
       return;
     }
 
@@ -124,24 +127,23 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
 
     try {
       const res = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "inactive" }),
+        method: "DELETE",
       });
 
       if (res.ok) {
-        const updated = await res.json();
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: updated.status } : u));
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        onDataChange?.(); // Trigger page refresh
       } else {
-        alert("Failed to deactivate user");
+        alert("Failed to delete user");
       }
     } catch (error) {
-      console.error("Error deactivating user:", error);
-      alert("Failed to deactivate user");
+      console.error("Error deleting user:", error);
+      alert("Failed to delete user");
     } finally {
       setLoading(false);
     }
   };
+
 
   const sendInvitation = async (userId: string) => {
     if (!confirm("Send invitation email to this user?")) {
@@ -215,7 +217,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
           </thead>
           <tbody className="divide-y divide-border/50">
             {users.map((user) => (
-              <tr key={user.id} className={`hover:bg-secondary/30 ${user.status === 'inactive' && 'opacity-50'}`}>
+              <tr key={user.id} className="hover:bg-secondary/30">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-muted-foreground" />
@@ -248,24 +250,22 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                 )}
                 <td className="px-4 py-3">
                   <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.role === 'admin'
-                        ? 'bg-purple-900/60 text-purple-300'
-                        : 'bg-secondary/60 text-foreground'
-                    }`}
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin'
+                      ? 'bg-purple-900/60 text-purple-300'
+                      : 'bg-secondary/60 text-foreground'
+                      }`}
                   >
                     {user.role}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.status === 'active'
-                        ? 'bg-green-900/60 text-green-300'
-                        : user.status === 'pending'
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.status === 'active'
+                      ? 'bg-green-900/60 text-green-300'
+                      : user.status === 'pending'
                         ? 'bg-yellow-900/60 text-yellow-300'
                         : 'bg-red-500/20/60 text-red-400'
-                    }`}
+                      }`}
                   >
                     {user.status === 'active' && '● Active'}
                     {user.status === 'pending' && '○ Pending'}
@@ -297,15 +297,13 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    {user.status !== 'inactive' && (
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
-                        title="Deactivate user"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleDelete(user.id)}
+                      className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
+                      title="Delete user"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -323,7 +321,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-background/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-card/95 rounded-lg p-6 max-w-lg w-full border border-border/50">
+          <div className="bg-card rounded-lg p-6 max-w-lg w-full border border-border/50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">
                 {editingUser ? "Edit User" : "Add User"}
