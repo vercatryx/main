@@ -116,7 +116,7 @@ If you didn't expect this email, you can safely ignore it.
     try {
         // Use SES to send email
         const command = new SendEmailCommand({
-            Source: process.env.EMAIL_USER || 'noreply@vercatryx.com',
+            Source: 'dh@vercatryx.com',
             Destination: {
                 ToAddresses: [email],
             },
@@ -138,22 +138,24 @@ If you didn't expect this email, you can safely ignore it.
         await ses.send(command);
         return true;
     } catch (error) {
-        console.error('Error sending invitation email:', error);
+        console.error('Error sending invitation email via SES:', error);
 
-        // Fallback: Try using the existing Gmail setup
+        // Fallback: Try using Zoho Mail SMTP
         try {
             const nodemailer = await import('nodemailer');
 
             const transporter = nodemailer.default.createTransport({
-                service: 'gmail',
+                host: 'smtp.zoho.com',
+                port: 587,
+                secure: false, // true for 465, false for other ports
                 auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS,
+                    user: 'dh@vercatryx.com',
+                    pass: process.env.ZOHO_APP_PASSWORD,
                 },
             });
 
             await transporter.sendMail({
-                from: process.env.EMAIL_USER,
+                from: '"Vercatryx" <dh@vercatryx.com>',
                 to: email,
                 subject,
                 html: htmlBody,
@@ -162,7 +164,7 @@ If you didn't expect this email, you can safely ignore it.
 
             return true;
         } catch (fallbackError) {
-            console.error('Error sending invitation email via Gmail fallback:', fallbackError);
+            console.error('Error sending invitation email via Zoho fallback:', fallbackError);
             return false;
         }
     }
