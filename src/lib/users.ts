@@ -38,6 +38,33 @@ export async function getUserByClerkId(clerkUserId: string): Promise<User | null
 }
 
 /**
+ * Get multiple users by their Clerk user IDs
+ */
+export async function getUsersByClerkIds(clerkUserIds: string[]): Promise<User[]> {
+  try {
+    if (clerkUserIds.length === 0) {
+      return [];
+    }
+
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .in('clerk_user_id', clerkUserIds);
+
+    if (error) {
+      console.error('Error getting users by Clerk IDs:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error getting users by Clerk IDs:', error);
+    return [];
+  }
+}
+
+/**
  * Get user by email address
  */
 export async function getUserByEmail(email: string): Promise<User | null> {

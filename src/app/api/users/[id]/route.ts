@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { getUserById, updateUser, deleteUser } from '@/lib/users';
 import { canManageUser, isSuperAdmin, getCurrentUser } from '@/lib/permissions';
 
@@ -63,6 +64,29 @@ export async function PATCH(
       );
     }
 
+    // Prevent users from editing themselves (including admins)
+    const currentUser = await getCurrentUser();
+    const superAdmin = await isSuperAdmin();
+    
+    // Check if trying to edit self (for users with DB entry)
+    if (currentUser && currentUser.id === id) {
+      return NextResponse.json(
+        { error: 'Forbidden - cannot edit yourself' },
+        { status: 403 }
+      );
+    }
+    
+    // For super admins without DB entry, check via Clerk ID
+    if (superAdmin && !currentUser && targetUser.clerk_user_id) {
+      const { userId } = await auth();
+      if (userId === targetUser.clerk_user_id) {
+        return NextResponse.json(
+          { error: 'Forbidden - cannot edit yourself' },
+          { status: 403 }
+        );
+      }
+    }
+
     const body = await req.json();
 
     // Validate role if provided
@@ -82,9 +106,7 @@ export async function PATCH(
     }
 
     // Company admins cannot modify other admins
-    const superAdmin = await isSuperAdmin();
     if (!superAdmin) {
-      const currentUser = await getCurrentUser();
       if (currentUser && targetUser.role === 'admin' && targetUser.company_id === currentUser.company_id) {
         // Prevent company admins from changing other company admins
         if (body.role && body.role !== 'admin') {
@@ -93,6 +115,34 @@ export async function PATCH(
             { status: 403 }
           );
         }
+      }
+    }
+
+    // Prevent admins from changing their own all_projects_access
+    if (body.all_projects_access !== undefined && targetUser.role === 'admin') {
+      // Check if trying to change own access
+      if (currentUser && currentUser.id === id) {
+        return NextResponse.json(
+          { error: 'Forbidden - admins cannot change their own project access' },
+          { status: 403 }
+        );
+      }
+      // For super admins without DB entry, check via Clerk ID
+      if (superAdmin && !currentUser && targetUser.clerk_user_id) {
+        const { userId } = await auth();
+        if (userId === targetUser.clerk_user_id) {
+          return NextResponse.json(
+            { error: 'Forbidden - admins cannot change their own project access' },
+            { status: 403 }
+          );
+        }
+      }
+      // Admins must always have all_projects_access = true
+      if (!body.all_projects_access) {
+        return NextResponse.json(
+          { error: 'Forbidden - admins must have access to all projects' },
+          { status: 403 }
+        );
       }
     }
 
@@ -105,7 +155,16 @@ export async function PATCH(
     if (body.status !== undefined) updates.status = body.status;
     if (body.clerk_user_id !== undefined) updates.clerk_user_id = body.clerk_user_id;
     if (body.is_active !== undefined) updates.is_active = body.is_active;
-    if (body.all_projects_access !== undefined) updates.all_projects_access = body.all_projects_access;
+    
+    // Force all_projects_access to true for admins
+    // If role is being changed to admin, automatically set all_projects_access to true
+    const newRole = body.role !== undefined ? body.role : targetUser.role;
+    if (newRole === 'admin') {
+      updates.all_projects_access = true; // Always true for admins
+    } else if (body.all_projects_access !== undefined) {
+      // Only allow changing all_projects_access for non-admins
+      updates.all_projects_access = body.all_projects_access;
+    }
 
     const user = await updateUser(id, updates);
 
@@ -148,10 +207,31 @@ export async function DELETE(
       );
     }
 
-    // Company admins cannot delete other admins
+    // Prevent users from deleting themselves (including admins)
+    const currentUser = await getCurrentUser();
     const superAdmin = await isSuperAdmin();
+    
+    // Check if trying to delete self (for users with DB entry)
+    if (currentUser && currentUser.id === id) {
+      return NextResponse.json(
+        { error: 'Forbidden - cannot delete yourself' },
+        { status: 403 }
+      );
+    }
+    
+    // For super admins without DB entry, check via Clerk ID
+    if (superAdmin && !currentUser && targetUser.clerk_user_id) {
+      const { userId } = await auth();
+      if (userId === targetUser.clerk_user_id) {
+        return NextResponse.json(
+          { error: 'Forbidden - cannot delete yourself' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Company admins cannot delete other admins
     if (!superAdmin) {
-      const currentUser = await getCurrentUser();
       if (currentUser && targetUser.role === 'admin' && targetUser.company_id === currentUser.company_id) {
         return NextResponse.json(
           { error: 'Forbidden - cannot delete another admin' },

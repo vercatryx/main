@@ -149,7 +149,13 @@ export default function AdminClientNew({
       {/* Tab Content */}
       <div className="pb-12">
         {activeTab === "companies" && isSuperAdmin && (
-          <CompaniesManagement initialCompanies={companies} onDataChange={handleDataChange} />
+          <CompaniesManagement 
+            initialCompanies={companies} 
+            initialUsers={initialUsers}
+            initialProjects={projectsArray}
+            currentUser={currentUser}
+            onDataChange={handleDataChange} 
+          />
         )}
 
         {activeTab === "users" && (
@@ -157,6 +163,7 @@ export default function AdminClientNew({
             initialUsers={initialUsers}
             companies={companies}
             isSuperAdmin={isSuperAdmin}
+            currentUser={currentUser}
             onDataChange={handleDataChange}
           />
         )}

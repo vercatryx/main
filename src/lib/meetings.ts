@@ -1,4 +1,5 @@
 import { getServerSupabaseClient } from './supabase';
+import { getUserByClerkId } from './users';
 
 export interface Meeting {
   id: string;
@@ -138,28 +139,112 @@ export async function getMeeting(id: string): Promise<Meeting | null> {
 
 /**
  * Get all meetings for a specific user (either as host or participant)
+ * Includes meetings assigned to the user's company when accessType is 'company'
  */
 export async function getUserMeetings(userId: string): Promise<Meeting[]> {
   const supabase = getServerSupabaseClient();
-  const { data, error } = await supabase
-    .from('meetings')
-    .select('*')
-    .or(`host_user_id.eq.${userId},participant_user_ids.cs.{${userId}}`)
-    .order('scheduled_at', { ascending: false });
-
-  if (error) {
-    console.error('Error getting user meetings:', error);
-    throw new Error(`Failed to get user meetings: ${error.message}`);
+  
+  // Get user's database record to get their UUID and company_id
+  const user = await getUserByClerkId(userId);
+  if (!user) {
+    // If user doesn't exist in database, return empty array
+    return [];
   }
 
-  return (data || []).map((row) => rowToMeeting(row as MeetingRow));
+  const userUuid = user.id;
+  const userCompanyId = user.company_id;
+
+  // Query 1: User-specific meetings (host or participant)
+  // Get meetings where user is host OR user is in participant list
+  // We need to check both conditions separately because Supabase array queries can be tricky
+  const { data: hostMeetings, error: hostError } = await supabase
+    .from('meetings')
+    .select('*')
+    .eq('host_user_id', userUuid);
+
+  // Query for meetings where user is in participant list
+  // Fetch all meetings and filter in code to ensure we catch all matches
+  const { data: allMeetingsForParticipant, error: participantError } = await supabase
+    .from('meetings')
+    .select('*');
+  
+  // Filter meetings where user is in participant list
+  const participantMeetings = (allMeetingsForParticipant || []).filter((meeting: any) => {
+    return Array.isArray(meeting.participant_user_ids) && 
+           meeting.participant_user_ids.includes(userUuid);
+  });
+  
+  if (participantError) {
+    console.error('Error fetching meetings for participant filter:', participantError);
+  }
+
+  // Note: Public meetings are excluded for regular users - only superusers can see them
+  // This is handled at the API/component level, not in the database query
+
+  if (hostError) {
+    console.error('Error getting user-specific meetings:', hostError);
+    throw new Error(`Failed to get user meetings: ${hostError?.message}`);
+  }
+  
+  // Log participant error but don't throw - we'll use the filtered results
+  if (participantError) {
+    console.error('Error fetching meetings for participant filter (continuing with empty array):', participantError);
+  }
+
+  // Combine and deduplicate (excluding public meetings - they're filtered at component level)
+  const userMeetingsMap = new Map<string, MeetingRow>();
+  (hostMeetings || []).forEach((m: any) => userMeetingsMap.set(m.id, m as MeetingRow));
+  (participantMeetings || []).forEach((m: any) => userMeetingsMap.set(m.id, m as MeetingRow));
+  const userMeetings = Array.from(userMeetingsMap.values());
+
+  // Query 2: Company-based meetings (if user has a company)
+  let companyMeetings: MeetingRow[] = [];
+  if (userCompanyId) {
+    const { data: companyData, error: companyError } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('access_type', 'company')
+      .contains('participant_company_ids', [userCompanyId]);
+
+    if (companyError) {
+      console.error('Error getting company meetings:', companyError);
+      // Don't throw - just log the error and continue with user meetings
+    } else {
+      companyMeetings = (companyData || []) as MeetingRow[];
+    }
+  }
+
+  // Combine and deduplicate meetings by ID
+  const allMeetingsMap = new Map<string, MeetingRow>();
+  
+  (userMeetings || []).forEach((meeting) => {
+    allMeetingsMap.set(meeting.id, meeting as MeetingRow);
+  });
+  
+  companyMeetings.forEach((meeting) => {
+    if (!allMeetingsMap.has(meeting.id)) {
+      allMeetingsMap.set(meeting.id, meeting);
+    }
+  });
+
+  // Convert to Meeting objects and sort by scheduled_at
+  const meetings = Array.from(allMeetingsMap.values())
+    .map((row) => rowToMeeting(row))
+    .sort((a, b) => {
+      const dateA = new Date(a.scheduledAt).getTime();
+      const dateB = new Date(b.scheduledAt).getTime();
+      return dateB - dateA; // Descending order (most recent first)
+    });
+
+  return meetings;
 }
 
 /**
  * Get upcoming meetings for a user
  * Shows meetings where the join window is still valid:
- * - Meetings starting within 30 minutes or less
+ * - Meetings starting within 2 hours or less
  * - Meetings that started up to 3 hours ago
+ * Includes meetings assigned to the user's company when accessType is 'company'
  */
 export async function getUpcomingMeetings(userId: string): Promise<Meeting[]> {
   const supabase = getServerSupabaseClient();
@@ -167,27 +252,102 @@ export async function getUpcomingMeetings(userId: string): Promise<Meeting[]> {
   // Calculate the cutoff time: meetings that started more than 3 hours ago won't be shown
   const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
-  const { data, error } = await supabase
-    .from('meetings')
-    .select('*')
-    .or(`host_user_id.eq.${userId},participant_user_ids.cs.{${userId}}`)
-    .in('status', ['scheduled', 'in-progress'])
-    .order('scheduled_at', { ascending: true });
-
-  if (error) {
-    console.error('Error getting upcoming meetings:', error);
-    throw new Error(`Failed to get upcoming meetings: ${error.message}`);
+  // Get user's database record to get their UUID and company_id
+  const user = await getUserByClerkId(userId);
+  if (!user) {
+    // If user doesn't exist in database, return empty array
+    return [];
   }
 
-  // Filter meetings based on the join window (30 min before to 3 hours after)
-  const filteredMeetings = (data || [])
-    .map((row) => rowToMeeting(row as MeetingRow))
+  const userUuid = user.id;
+  const userCompanyId = user.company_id;
+
+  // Query 1: User-specific meetings (host or participant) with status filter
+  // Get meetings where user is host OR user is in participant list
+  const { data: hostMeetings, error: hostError } = await supabase
+    .from('meetings')
+    .select('*')
+    .eq('host_user_id', userUuid)
+    .in('status', ['scheduled', 'in-progress']);
+
+  // Query for meetings where user is in participant list
+  // Fetch all meetings with the right status and filter in code
+  const { data: allMeetingsForParticipant, error: participantError } = await supabase
+    .from('meetings')
+    .select('*')
+    .in('status', ['scheduled', 'in-progress']);
+  
+  // Filter meetings where user is in participant list
+  const participantMeetings = (allMeetingsForParticipant || []).filter((meeting: any) => {
+    return Array.isArray(meeting.participant_user_ids) && 
+           meeting.participant_user_ids.includes(userUuid);
+  });
+  
+  if (participantError) {
+    console.error('Error fetching meetings for participant filter:', participantError);
+  }
+  
+  const finalParticipantMeetings = participantMeetings;
+
+  // Note: Public meetings are excluded for regular users - only superusers can see them
+  // This is handled at the API/component level, not in the database query
+
+  if (hostError || participantError) {
+    console.error('Error getting user-specific upcoming meetings:', hostError || participantError);
+    throw new Error(`Failed to get upcoming meetings: ${(hostError || participantError)?.message}`);
+  }
+
+  // Combine and deduplicate (excluding public meetings - they're filtered at component level)
+  const userMeetingsMap = new Map<string, MeetingRow>();
+  (hostMeetings || []).forEach((m: any) => userMeetingsMap.set(m.id, m as MeetingRow));
+  (finalParticipantMeetings || []).forEach((m: any) => userMeetingsMap.set(m.id, m as MeetingRow));
+  const userMeetings = Array.from(userMeetingsMap.values());
+
+  // Query 2: Company-based meetings (if user has a company) with status filter
+  let companyMeetings: MeetingRow[] = [];
+  if (userCompanyId) {
+    const { data: companyData, error: companyError } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('access_type', 'company')
+      .contains('participant_company_ids', [userCompanyId])
+      .in('status', ['scheduled', 'in-progress']);
+
+    if (companyError) {
+      console.error('Error getting company upcoming meetings:', companyError);
+      // Don't throw - just log the error and continue with user meetings
+    } else {
+      companyMeetings = (companyData || []) as MeetingRow[];
+    }
+  }
+
+  // Combine and deduplicate meetings by ID
+  const allMeetingsMap = new Map<string, MeetingRow>();
+  
+  (userMeetings || []).forEach((meeting) => {
+    allMeetingsMap.set(meeting.id, meeting as MeetingRow);
+  });
+  
+  companyMeetings.forEach((meeting) => {
+    if (!allMeetingsMap.has(meeting.id)) {
+      allMeetingsMap.set(meeting.id, meeting);
+    }
+  });
+
+  // Convert to Meeting objects, filter by join window, and sort
+  const filteredMeetings = Array.from(allMeetingsMap.values())
+    .map((row) => rowToMeeting(row))
     .filter((meeting) => {
       const scheduledDate = new Date(meeting.scheduledAt);
       const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after scheduled time
 
       // Only show meetings where the join window hasn't ended yet
       return now <= joinWindowEnd;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.scheduledAt).getTime();
+      const dateB = new Date(b.scheduledAt).getTime();
+      return dateA - dateB; // Ascending order (soonest first)
     });
 
   return filteredMeetings;

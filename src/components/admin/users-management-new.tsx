@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2, Send, FolderOpen } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Mail, Phone, User as UserIcon, Building2, Send, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 import type { User, Company } from "@/types/company";
 import UserProjectAssignment from "./user-project-assignment";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface UserWithCompany extends User {
   company: Company;
@@ -13,15 +14,17 @@ interface UsersManagementProps {
   initialUsers: UserWithCompany[];
   companies: Company[];
   isSuperAdmin: boolean;
+  currentUser: User | null;
   onDataChange?: () => void;
 }
 
-export default function UsersManagementNew({ initialUsers, companies, isSuperAdmin, onDataChange }: UsersManagementProps) {
+export default function UsersManagementNew({ initialUsers, companies, isSuperAdmin, currentUser, onDataChange }: UsersManagementProps) {
   const [users, setUsers] = useState<UserWithCompany[]>(initialUsers);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithCompany | null>(null);
   const [loading, setLoading] = useState(false);
   const [assigningProjectsUser, setAssigningProjectsUser] = useState<UserWithCompany | null>(null);
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set(companies.map(c => c.id)));
   const [formData, setFormData] = useState({
     email: "",
     first_name: "",
@@ -30,6 +33,28 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
     role: "member" as "admin" | "member",
     company_id: "",
   });
+
+  // Group users by company
+  const usersByCompany = users.reduce((acc, user) => {
+    const companyId = user.company_id;
+    if (!acc[companyId]) {
+      acc[companyId] = [];
+    }
+    acc[companyId].push(user);
+    return acc;
+  }, {} as Record<string, UserWithCompany[]>);
+
+  const toggleCompany = (companyId: string) => {
+    setExpandedCompanies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
 
   const openAddModal = () => {
     setEditingUser(null);
@@ -200,123 +225,163 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
         </button>
       </div>
 
-      <div className="bg-card/80 rounded-lg border border-border/50 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-secondary/50 border-b border-border/50">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Name</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Email</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Phone</th>
-              {isSuperAdmin && (
-                <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Company</th>
-              )}
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Role</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-secondary/30">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <UserIcon className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      {user.first_name || user.last_name
-                        ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                        : 'No name'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 text-foreground">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    {user.email}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-foreground">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    {user.phone || '—'}
-                  </div>
-                </td>
-                {isSuperAdmin && (
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                      {user.company?.name || 'Unknown'}
+      <div className="space-y-4">
+        {companies.map((company) => {
+          const companyUsers = usersByCompany[company.id] || [];
+          const isExpanded = expandedCompanies.has(company.id);
+          
+          return (
+            <Collapsible
+              key={company.id}
+              open={isExpanded}
+              onOpenChange={() => toggleCompany(company.id)}
+            >
+              <div className="bg-card/80 rounded-lg border border-border/50 overflow-hidden">
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      )}
+                      <Building2 className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <h3 className="font-semibold text-lg text-left">{company.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {companyUsers.length} {companyUsers.length === 1 ? 'user' : 'users'}
+                        </p>
+                      </div>
                     </div>
-                  </td>
-                )}
-                <td className="px-4 py-3">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin'
-                      ? 'bg-purple-900/60 text-purple-300'
-                      : 'bg-secondary/60 text-foreground'
-                      }`}
-                  >
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.status === 'active'
-                      ? 'bg-green-900/60 text-green-300'
-                      : user.status === 'pending'
-                        ? 'bg-yellow-900/60 text-yellow-300'
-                        : 'bg-red-500/20/60 text-red-400'
-                      }`}
-                  >
-                    {user.status === 'active' && '● Active'}
-                    {user.status === 'pending' && '○ Pending'}
-                    {user.status === 'inactive' && '✕ Inactive'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2 justify-end">
-                    {user.status === 'pending' && (
-                      <button
-                        onClick={() => sendInvitation(user.id)}
-                        className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400"
-                        title="Send invitation email"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setAssigningProjectsUser(user)}
-                      className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400"
-                      title="Assign projects"
-                    >
-                      <FolderOpen className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => openEditModal(user)}
-                      className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
-                      title="Edit user"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user.id)}
-                      className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
-                      title="Delete user"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {users.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            No users found. Click "Add User" to create one.
-          </div>
-        )}
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent>
+                  <div className="p-4 pt-0">
+                    {companyUsers.length > 0 ? (
+                      <div className="bg-secondary/20 rounded-lg border border-border/50 overflow-hidden">
+                        <table className="w-full">
+                          <thead className="bg-secondary/50 border-b border-border/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Email</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Phone</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Role</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Status</th>
+                              <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/50">
+                            {companyUsers.map((user) => (
+                              <tr key={user.id} className="hover:bg-secondary/30">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                                    <span className="font-medium">
+                                      {user.first_name || user.last_name
+                                        ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                                        : 'No name'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2 text-foreground">
+                                    <Mail className="w-4 h-4 text-muted-foreground" />
+                                    {user.email}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-foreground">
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="w-4 h-4 text-muted-foreground" />
+                                    {user.phone || '—'}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin'
+                                      ? 'bg-purple-900/60 text-purple-300'
+                                      : 'bg-secondary/60 text-foreground'
+                                      }`}
+                                  >
+                                    {user.role}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${user.status === 'active'
+                                      ? 'bg-green-900/60 text-green-300'
+                                      : user.status === 'pending'
+                                        ? 'bg-yellow-900/60 text-yellow-300'
+                                        : 'bg-red-500/20/60 text-red-400'
+                                      }`}
+                                  >
+                                    {user.status === 'active' && '● Active'}
+                                    {user.status === 'pending' && '○ Pending'}
+                                    {user.status === 'inactive' && '✕ Inactive'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex gap-2 justify-end">
+                                    {user.status === 'pending' && (
+                                      <button
+                                        onClick={() => sendInvitation(user.id)}
+                                        className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400"
+                                        title="Send invitation email"
+                                      >
+                                        <Send className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => setAssigningProjectsUser(user)}
+                                      disabled={currentUser?.id === user.id || user.role === 'admin'}
+                                      className="p-1.5 hover:bg-blue-500/20/40 rounded transition-colors text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={currentUser?.id === user.id ? "Cannot change your own project access" : user.role === 'admin' ? "Admins have access to all projects" : "Assign projects"}
+                                    >
+                                      <FolderOpen className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => openEditModal(user)}
+                                      disabled={currentUser?.id === user.id}
+                                      className="p-1.5 hover:bg-secondary/60 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={currentUser?.id === user.id ? "Cannot edit yourself" : "Edit user"}
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(user.id)}
+                                      disabled={currentUser?.id === user.id}
+                                      className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={currentUser?.id === user.id ? "Cannot delete yourself" : "Delete user"}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <UserIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>No users for this company</p>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          );
+        })}
       </div>
+
+      {users.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground bg-card/80 rounded-lg border border-border/50">
+          <UserIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No users found. Click "Add User" to create one.</p>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {showModal && (
@@ -441,6 +506,7 @@ export default function UsersManagementNew({ initialUsers, companies, isSuperAdm
           userId={assigningProjectsUser.id}
           userName={`${assigningProjectsUser.first_name} ${assigningProjectsUser.last_name}`.trim() || assigningProjectsUser.email}
           companyId={assigningProjectsUser.company_id}
+          currentUser={currentUser}
           onClose={() => setAssigningProjectsUser(null)}
         />
       )}

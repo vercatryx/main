@@ -108,6 +108,29 @@ export async function PUT(
       );
     }
 
+    // Prevent admins from changing their own project permissions
+    if (targetUser.role === 'admin') {
+      // Check if trying to change own permissions
+      if (requestingUser && requestingUser.id === id) {
+        return NextResponse.json(
+          { error: 'Forbidden - admins cannot change their own project access' },
+          { status: 403 }
+        );
+      }
+      // For super admins without DB entry, check via Clerk ID
+      if (isSuperuser && !requestingUser && targetUser.clerk_user_id && userId === targetUser.clerk_user_id) {
+        return NextResponse.json(
+          { error: 'Forbidden - admins cannot change their own project access' },
+          { status: 403 }
+        );
+      }
+      // Admins always have access to all projects - don't allow setting specific projects
+      return NextResponse.json(
+        { error: 'Forbidden - admins have access to all projects and cannot have specific project permissions set' },
+        { status: 403 }
+      );
+    }
+
     const success = await setUserProjectPermissions(id, projectIds);
 
     if (!success) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { getProjectMessages, deleteChatFile } from '@/lib/chat';
+import { getServerSupabaseClient } from '@/lib/supabase';
 
 export async function DELETE(
   req: NextRequest,
@@ -17,22 +17,43 @@ export async function DELETE(
 
     const { projectId } = await context.params;
 
-    // Delete the chat messages JSON file
-    const chatFilePath = path.join(process.cwd(), 'data', 'chat', `${projectId}.json`);
-    try {
-      await fs.unlink(chatFilePath);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') { // Ignore if file doesn't exist
-        console.error('Error deleting chat JSON file:', error);
+    // Get all messages to find all attachments
+    const messages = await getProjectMessages(projectId);
+
+    // Delete all attachments from R2
+    const deletionPromises: Promise<void>[] = [];
+    for (const message of messages) {
+      if (message.attachments && Array.isArray(message.attachments)) {
+        for (const attachment of message.attachments) {
+          if (attachment.url) {
+            deletionPromises.push(
+              deleteChatFile(attachment.url).catch(error => {
+                console.error('Error deleting attachment from R2:', error);
+                // Don't throw - continue deleting other files
+              })
+            );
+          }
+        }
       }
     }
 
-    // Delete the chat files directory
-    const chatFilesDirPath = path.join(process.cwd(), 'public', 'chat-files', projectId);
-    try {
-      await fs.rm(chatFilesDirPath, { recursive: true, force: true });
-    } catch (error) {
-      console.error('Error deleting chat files directory:', error);
+    // Wait for all file deletions to complete (or fail gracefully)
+    await Promise.all(deletionPromises);
+    console.log(`Deleted ${deletionPromises.length} attachments from R2`);
+
+    // Delete all messages from the database
+    const supabase = getServerSupabaseClient();
+    const { error } = await supabase
+      .from('chat_messages')
+      .delete()
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting messages from database:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete messages from database' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true });

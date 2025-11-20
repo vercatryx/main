@@ -13,6 +13,7 @@ interface UserProjectAssignmentProps {
   userId: string;
   userName: string;
   companyId: string;
+  currentUser: { id: string } | null;
   onClose: () => void;
 }
 
@@ -20,6 +21,7 @@ export default function UserProjectAssignment({
   userId,
   userName,
   companyId,
+  currentUser,
   onClose
 }: UserProjectAssignmentProps) {
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,8 @@ export default function UserProjectAssignment({
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignedProjectIds, setAssignedProjectIds] = useState<string[]>([]);
   const [allProjectsAccess, setAllProjectsAccess] = useState(false);
+  const [userRole, setUserRole] = useState<string>('member');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,11 +49,13 @@ export default function UserProjectAssignment({
           setAssignedProjectIds(data.projectIds || []);
         }
 
-        // Fetch user's all_projects_access status
+        // Fetch user's all_projects_access status and role
         const userRes = await fetch(`/api/users/${userId}`);
         if (userRes.ok) {
           const userData = await userRes.json();
           setAllProjectsAccess(userData.all_projects_access || false);
+          setUserRole(userData.role || 'member');
+          setIsAdmin(userData.role === 'admin');
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -62,6 +68,12 @@ export default function UserProjectAssignment({
   }, [userId, companyId]);
 
   const handleSave = async () => {
+    // Prevent saving if admin or self-editing
+    if (isAdmin || (currentUser && currentUser.id === userId)) {
+      alert('Cannot modify project access for admins or yourself');
+      return;
+    }
+
     setSaving(true);
     try {
       // Update all_projects_access
@@ -74,7 +86,8 @@ export default function UserProjectAssignment({
       });
 
       if (!userUpdateRes.ok) {
-        alert('Failed to update user access settings');
+        const errorData = await userUpdateRes.json();
+        alert(errorData.error || 'Failed to update user access settings');
         return;
       }
 
@@ -89,7 +102,8 @@ export default function UserProjectAssignment({
         });
 
         if (!permissionsRes.ok) {
-          alert('Failed to update project permissions');
+          const errorData = await permissionsRes.json();
+          alert(errorData.error || 'Failed to update project permissions');
           return;
         }
       }
@@ -135,26 +149,53 @@ export default function UserProjectAssignment({
           </div>
         ) : (
           <>
+            {/* Admin notice - admins always have access to all projects */}
+            {isAdmin && (
+              <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                <div className="text-yellow-400 font-medium mb-2">Admin User</div>
+                <p className="text-sm text-yellow-300">
+                  Admins automatically have access to all projects in the company. Project access cannot be modified for admin users.
+                </p>
+              </div>
+            )}
+
+            {/* Prevent self-editing notice */}
+            {currentUser && currentUser.id === userId && (
+              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+                <div className="text-red-400 font-medium mb-2">Cannot Modify Own Access</div>
+                <p className="text-sm text-red-300">
+                  You cannot change your own project access settings.
+                </p>
+              </div>
+            )}
+
             {/* All Projects Access Toggle */}
             <div className="mb-6 p-4 bg-secondary/50 rounded-lg border border-border">
-              <label className="flex items-start gap-3 cursor-pointer">
+              <label className={`flex items-start gap-3 ${(isAdmin || (currentUser && currentUser.id === userId)) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                 <input
                   type="checkbox"
-                  checked={allProjectsAccess}
-                  onChange={(e) => setAllProjectsAccess(e.target.checked)}
+                  checked={allProjectsAccess || isAdmin}
+                  onChange={(e) => {
+                    if (!isAdmin && !(currentUser && currentUser.id === userId)) {
+                      setAllProjectsAccess(e.target.checked);
+                    }
+                  }}
+                  disabled={!!(isAdmin || (currentUser && currentUser.id === userId))}
                   className="w-5 h-5 mt-0.5"
                 />
                 <div>
                   <div className="text-foreground font-medium">Grant Access to All Projects</div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    User will automatically have access to all current and future projects in the company.
+                    {isAdmin 
+                      ? 'Admins automatically have access to all projects.'
+                      : 'User will automatically have access to all current and future projects in the company.'}
                   </p>
                 </div>
               </label>
             </div>
 
             {/* Individual Project Selection */}
-            {!allProjectsAccess && (
+            {!allProjectsAccess && !isAdmin && (
               <div>
                 <h4 className="text-foreground font-medium mb-3">Select Specific Projects</h4>
                 {projects.length === 0 ? (
@@ -210,7 +251,7 @@ export default function UserProjectAssignment({
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={!!(saving || isAdmin || (currentUser && currentUser.id === userId))}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-500 text-foreground rounded-lg transition-colors disabled:bg-gray-700 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Save Changes'}

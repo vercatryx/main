@@ -224,10 +224,39 @@ export async function updateProjectMessages(
 }
 
 /**
- * Delete a specific message
+ * Delete a specific message and its attachments from R2
  */
 export async function deleteMessage(messageId: string): Promise<boolean> {
   const supabase = getServerSupabaseClient();
+  
+  // First, get the message to find its attachments
+  const { data: messageData, error: fetchError } = await supabase
+    .from('chat_messages')
+    .select('attachments')
+    .eq('id', messageId)
+    .single();
+
+  if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
+    console.error('Error fetching message for deletion:', fetchError);
+  }
+
+  // Delete attachments from R2 if they exist
+  if (messageData?.attachments && Array.isArray(messageData.attachments)) {
+    const attachments = messageData.attachments as ChatAttachment[];
+    for (const attachment of attachments) {
+      if (attachment.url) {
+        try {
+          await deleteChatFile(attachment.url);
+          console.log('Deleted attachment from R2:', attachment.url);
+        } catch (error) {
+          console.error('Error deleting attachment from R2:', error);
+          // Continue deleting other attachments even if one fails
+        }
+      }
+    }
+  }
+
+  // Now delete the message from the database
   const { error } = await supabase
     .from('chat_messages')
     .delete()

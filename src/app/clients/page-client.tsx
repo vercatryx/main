@@ -224,6 +224,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
   const lastViewedTimestampsRef = useRef<Record<string, number>>({});
   const openingTimestampRef = useRef<Record<string, number>>({});
   const hasLoadedUnreadCountsForUserRef = useRef<string | null>(null);
+  const previousChatStateRef = useRef<'closed' | 'sidebar' | 'expanded'>(
+    (() => {
+      const chatStateFromUrl = searchParams.get('chatState');
+      return (chatStateFromUrl as 'closed' | 'sidebar' | 'expanded') || 'closed';
+    })()
+  );
 
   // Initialize selected project from URL or default
   useEffect(() => {
@@ -284,13 +290,16 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         const res = await fetch('/api/meetings/upcoming');
         if (res.ok) {
           const data = await res.json();
-          // Get the first meeting that's within 3 hours
+          // Get the first meeting that hasn't ended yet (scheduledAt + duration hasn't passed)
           const now = new Date();
           const upcomingMeetings = data.meetings.filter((meeting: Meeting) => {
             const scheduledDate = new Date(meeting.scheduledAt);
-            const joinWindowStart = new Date(scheduledDate.getTime() - 30 * 60 * 1000); // 30 min before
-            const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after
-            return now >= joinWindowStart && now <= joinWindowEnd;
+            const meetingEndTime = new Date(scheduledDate.getTime() + meeting.duration * 60 * 1000); // scheduledAt + duration
+            const joinWindowStart = new Date(scheduledDate.getTime() - 2 * 60 * 60 * 1000); // 2 hours before
+            const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after scheduled time
+            
+            // Only show if meeting hasn't ended AND we're within join window
+            return now < meetingEndTime && now >= joinWindowStart && now <= joinWindowEnd;
           });
           setUpcomingMeeting(upcomingMeetings[0] || null);
         }
@@ -434,6 +443,47 @@ export default function ClientPortal({ projects, userName, companyName, user, is
     }
   }, [chatProjectId, chatState, clerkUser?.id]);
 
+  // Mark messages as read when chat is closed (user leaves the chat)
+  useEffect(() => {
+    // Only mark as read when transitioning from open (sidebar/expanded) to closed
+    const wasOpen = previousChatStateRef.current !== 'closed';
+    const isNowClosed = chatState === 'closed';
+    
+    if (chatProjectId && wasOpen && isNowClosed && clerkUser?.id && messages.length > 0) {
+      // Mark all messages as read by updating last viewed timestamp to the latest message timestamp
+      // Find the latest message timestamp
+      const latestMessageTimestamp = Math.max(...messages.map(msg => msg.timestamp));
+      const now = Date.now();
+      // Use the later of the two: latest message timestamp or current time
+      // This ensures we mark all visible messages as read
+      const readTimestamp = Math.max(latestMessageTimestamp, now);
+      
+      // Only update if this is newer than the current stored timestamp
+      const currentLastViewed = lastViewedTimestampsRef.current[chatProjectId] || 0;
+      if (readTimestamp > currentLastViewed) {
+        lastViewedTimestampsRef.current[chatProjectId] = readTimestamp;
+        
+        // Save to localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('chat_last_viewed', JSON.stringify(lastViewedTimestampsRef.current));
+        }
+
+        // Update unread counts
+        setUnreadCounts(prev => {
+          const updated = { ...prev };
+          delete updated[chatProjectId];
+          return updated;
+        });
+
+        // Recalculate unread counts to ensure accuracy
+        calculateUnreadCounts();
+      }
+    }
+    
+    // Update the previous state ref
+    previousChatStateRef.current = chatState;
+  }, [chatState, chatProjectId, clerkUser?.id, messages, calculateUnreadCounts]);
+
   useEffect(() => {
     if (!chatProjectId) return;
 
@@ -480,7 +530,17 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 const newMessage = rowToMessage(payload.new as any);
                 setMessages((prev) => {
                   // Check if message already exists to avoid duplicates
-                  if (prev.some((msg) => msg.id === newMessage.id)) {
+                  // Check by ID first (most reliable), then by content + timestamp + userId as fallback
+                  const isDuplicate = prev.some((msg) => 
+                    msg.id === newMessage.id ||
+                    (msg.userId === newMessage.userId &&
+                     msg.message === newMessage.message &&
+                     Math.abs(msg.timestamp - newMessage.timestamp) < 1000 && // Within 1 second
+                     (!msg.attachments?.length && !newMessage.attachments?.length || 
+                      JSON.stringify(msg.attachments) === JSON.stringify(newMessage.attachments)))
+                  );
+                  if (isDuplicate) {
+                    console.log('Duplicate message detected, skipping:', newMessage.id);
                     return prev;
                   }
                   // Insert in sorted order by timestamp
@@ -747,12 +807,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       });
 
       if (res.ok) {
-        const newMessage = await res.json();
-        setMessages((prev) => [...prev, newMessage]);
+        // Don't add message optimistically - let the realtime subscription handle it
+        // This prevents duplicate messages
         input.value = '';
         setSelectedFiles([]);
-        // Scroll to bottom after sending message
-        scrollToBottom();
+        // Scroll to bottom after sending message (realtime will add it shortly)
+        setTimeout(() => scrollToBottom(), 100);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -900,12 +960,12 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       });
 
       if (res.ok) {
-        const newMessage = await res.json();
-        setMessages((prev) => [...prev, newMessage]);
+        // Don't add message optimistically - let the realtime subscription handle it
+        // This prevents duplicate messages
         setAudioBlob(null);
         setRecordingTime(0);
-        // Scroll to bottom after sending voice note
-        scrollToBottom();
+        // Scroll to bottom after sending voice note (realtime will add it shortly)
+        setTimeout(() => scrollToBottom(), 100);
       }
     } catch (error) {
       console.error('Error sending voice note:', error);
@@ -1021,7 +1081,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       {/* Sidebar - full width on mobile, toggleable on desktop */}
       <div
         className={`${isMobile ? 'w-full' : isSidebarOpen ? 'w-80' : 'w-0'
-          } bg-background border-r border-border transition-all duration-300 overflow-hidden flex flex-col`}
+          } bg-background border-r border-border transition-all duration-300 overflow-hidden flex flex-col relative`}
       >
         {chatState === 'sidebar' ? (
           <>
@@ -1062,7 +1122,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               </p>
             </div>
             {/* Chat Content */}
-            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col">
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col min-h-0">
               {isLoadingMessages ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex flex-col items-center gap-3">
@@ -1304,8 +1364,8 @@ export default function ClientPortal({ projects, userName, companyName, user, is
           </>
         ) : chatState === 'expanded' && isMobile ? (
           /* Mobile Expanded Chat - takes over entire screen */
-          <div className="w-full h-full bg-card flex flex-col">
-            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/60">
+          <div className="w-full h-screen bg-card flex flex-col fixed inset-0 z-50">
+            <div className="flex-shrink-0 p-4 border-b border-border/50 flex justify-between items-center bg-card/60">
               <h3 className="font-bold">
                 {getProjectForChat()?.title}
               </h3>
@@ -1333,7 +1393,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 </button>
               </div>
             </div>
-            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto flex flex-col bg-background/50">
+            <div ref={chatContainerRef} className="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col bg-background/50">
               {isLoadingMessages ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="flex flex-col items-center gap-3">
@@ -1465,7 +1525,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-border/50 bg-card/40">
+            <div className="flex-shrink-0 p-4 border-t border-border/50 bg-card/40">
               {selectedFiles.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {selectedFiles.map((file, index) => (
@@ -1574,7 +1634,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
         ) : (
           <>
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/40">
+            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/40 relative z-10">
               <div>
                 <h2 className="text-xl font-bold mb-1 text-foreground">{companyName}</h2>
                 <p className="text-sm text-muted-foreground">
@@ -1612,7 +1672,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
             {/* Super Admin Company Selector */}
             {isSuperAdmin && (
-              <div className="p-4 border-b border-border/50 bg-card/20 space-y-3">
+              <div className="p-4 border-b border-border/50 bg-card/20 space-y-3 relative z-10">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                     Select Company
@@ -1650,7 +1710,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
             {/* Upcoming Meeting for Users */}
             {upcomingMeeting && (
-              <div className="p-4 border-b border-border/50">
+              <div className="p-4 border-b border-border/50 relative z-10 bg-background">
                 <div className="bg-brand-blue/10 border border-brand-blue/20 rounded-lg p-3">
                   <div className="flex items-start gap-2">
                     <Video className="w-5 h-5 text-brand-blue mt-0.5" />
@@ -1684,10 +1744,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             )}
 
             {/* Meetings Button */}
-            <div className="p-4 border-b border-border/50">
+            <div className="p-4 border-b border-border/50 relative z-10 bg-background">
               <button
                 onClick={() => setShowMeetingsModal(true)}
-                className="w-full flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-hover text-white px-4 py-2 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-hover text-white px-4 py-2 rounded-lg transition-colors relative z-10"
               >
                 <Video className="w-4 h-4" />
                 My Meetings
@@ -1696,7 +1756,7 @@ export default function ClientPortal({ projects, userName, companyName, user, is
 
 
             {/* Projects List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
               {currentProjects.map((project) => (
                 <div key={project.id} className="relative">
                   <button

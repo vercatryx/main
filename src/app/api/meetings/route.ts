@@ -7,6 +7,48 @@ import {
   generateJitsiRoomName,
   type Meeting,
 } from '@/lib/meetings';
+import { getUserByClerkId, getUserById, createUser } from '@/lib/users';
+import { getAllCompanies } from '@/lib/companies';
+
+// Helper function to enrich meetings with participant names
+async function enrichMeetingsWithParticipantNames(meetings: Meeting[]): Promise<Meeting[]> {
+  // Collect all unique user IDs
+  const userIds = new Set<string>();
+  meetings.forEach(meeting => {
+    userIds.add(meeting.hostUserId);
+    meeting.participantUserIds.forEach(id => userIds.add(id));
+  });
+
+  // Fetch all users at once
+  const usersMap = new Map<string, { firstName: string | null; lastName: string | null; email: string }>();
+  for (const userId of userIds) {
+    const user = await getUserById(userId);
+    if (user) {
+      usersMap.set(userId, {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+      });
+    }
+  }
+
+  // Add participant names to meetings (we'll add this as metadata, not changing the Meeting type)
+  return meetings.map(meeting => ({
+    ...meeting,
+    // Add participant names as a computed property (we'll handle this on the client)
+    _participantNames: [
+      meeting.hostUserId,
+      ...meeting.participantUserIds
+    ].map(id => {
+      const user = usersMap.get(id);
+      if (user) {
+        const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        return name || user.email;
+      }
+      return null;
+    }).filter(Boolean) as string[],
+  }));
+}
 
 // GET /api/meetings - Get meetings for the authenticated user
 export async function GET() {
@@ -22,14 +64,18 @@ export async function GET() {
     const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };
 
     // If user is a superuser, return all meetings
+    let meetings: Meeting[];
     if (publicMetadata?.role === 'superuser') {
-      const meetings = await getAllMeetingsList();
-      return NextResponse.json({ meetings });
+      meetings = await getAllMeetingsList();
+    } else {
+      // Otherwise, return only the user's meetings
+      meetings = await getUserMeetings(userId);
     }
 
-    // Otherwise, return only the user's meetings
-    const meetings = await getUserMeetings(userId);
-    return NextResponse.json({ meetings });
+    // Enrich with participant names
+    const enrichedMeetings = await enrichMeetingsWithParticipantNames(meetings);
+    
+    return NextResponse.json({ meetings: enrichedMeetings });
   } catch (error) {
     console.error('Error fetching meetings:', error);
     return NextResponse.json(
@@ -98,12 +144,86 @@ export async function POST(request: Request) {
     // Let database auto-generate UUID for meeting ID
     const tempJitsiRoomName = `vercatryx-temp-${Date.now()}`; // Temporary, will be updated
 
+    // Convert Clerk user IDs to database UUIDs for participants
+    const participantDatabaseIds: string[] = [];
+    const missingUsers: string[] = [];
+    if (Array.isArray(participantUserIds) && participantUserIds.length > 0) {
+      for (const clerkId of participantUserIds) {
+        const dbUser = await getUserByClerkId(clerkId);
+        if (dbUser) {
+          participantDatabaseIds.push(dbUser.id);
+        } else {
+          // Log missing users for debugging
+          const clerkUser = await client.users.getUser(clerkId).catch(() => null);
+          missingUsers.push(clerkUser?.emailAddresses[0]?.emailAddress || clerkId);
+        }
+      }
+      
+      // If access type is 'users' and we couldn't find any participants, that's an error
+      if (accessType === 'users' && participantDatabaseIds.length === 0 && participantUserIds.length > 0) {
+        return NextResponse.json(
+          { 
+            error: `Selected users not found in database: ${missingUsers.join(', ')}. Please ensure users are properly set up.` 
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Convert host Clerk ID to database UUID
+    // For superusers, create a database record if it doesn't exist
+    let hostDbUser = await getUserByClerkId(userId);
+    if (!hostDbUser) {
+      // Superuser doesn't exist in database - create them
+      // Get the first company or create a default one
+      const companies = await getAllCompanies();
+      let companyId: string;
+      
+      if (companies.length > 0) {
+        companyId = companies[0].id;
+      } else {
+        // No companies exist - this shouldn't happen, but handle it gracefully
+        return NextResponse.json(
+          { error: 'No companies found. Please create a company first.' },
+          { status: 400 }
+        );
+      }
+
+      // Get user email from Clerk
+      const userEmail = user.emailAddresses[0]?.emailAddress;
+      if (!userEmail) {
+        return NextResponse.json(
+          { error: 'User email not found. Please ensure your Clerk account has an email address.' },
+          { status: 400 }
+        );
+      }
+
+      // Create user record for superuser
+      try {
+        hostDbUser = await createUser({
+          company_id: companyId,
+          clerk_user_id: userId,
+          email: userEmail,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          role: 'admin',
+          status: 'active',
+        });
+      } catch (error) {
+        console.error('Error creating superuser in database:', error);
+        return NextResponse.json(
+          { error: 'Failed to create user record. Please contact support.' },
+          { status: 500 }
+        );
+      }
+    }
+
     const meeting: Meeting = {
       id: '', // Will be generated by database
       title,
       description: description || '',
-      hostUserId: userId,
-      participantUserIds: Array.isArray(participantUserIds) ? participantUserIds : [],
+      hostUserId: hostDbUser.id, // Store database UUID instead of Clerk ID
+      participantUserIds: participantDatabaseIds, // Store database UUIDs instead of Clerk IDs
       participantCompanyIds: Array.isArray(participantCompanyIds) ? participantCompanyIds : [],
       accessType: accessType || 'users',
       scheduledAt,

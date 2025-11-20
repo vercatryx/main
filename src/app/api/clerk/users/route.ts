@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { getUsersByClerkIds } from '@/lib/users';
 
 export async function GET() {
   try {
@@ -27,14 +28,24 @@ export async function GET() {
       limit: 500, // Adjust as needed
     });
 
-    // Format users for the modal
-    const users = allUsers.data.map(user => ({
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      emailAddresses: user.emailAddresses,
-      publicMetadata: user.publicMetadata,
-    }));
+    // Get Clerk IDs to fetch database user info
+    const clerkIds = allUsers.data.map(u => u.id);
+    const dbUsers = await getUsersByClerkIds(clerkIds);
+    
+    // Create a map of Clerk ID to database user for quick lookup
+    const dbUsersMap = new Map(dbUsers.map(u => [u.clerk_user_id, u]));
+
+    // Format users for the modal - merge Clerk data with database data (prioritize database names)
+    const users = allUsers.data.map(user => {
+      const dbUser = dbUsersMap.get(user.id);
+      return {
+        id: user.id,
+        firstName: dbUser?.first_name || user.firstName || null,
+        lastName: dbUser?.last_name || user.lastName || null,
+        emailAddresses: user.emailAddresses,
+        publicMetadata: user.publicMetadata,
+      };
+    });
 
     return NextResponse.json({ users });
   } catch (error) {

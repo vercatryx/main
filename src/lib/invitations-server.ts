@@ -54,7 +54,12 @@ export async function sendInvitationEmail(params: SendInvitationParams): Promise
     .header img { width: 90px; margin-bottom: 18px; }
     .header h1 { margin: 0; font-size: 26px; color: #fff; font-weight: 700; letter-spacing: 1px; }
     .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 12px 12px; color:#dcdcdc; }
-    .button { display: inline-block; padding: 12px 30px; background: #e44848; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0 10px 0; font-weight: bold; }
+    .button { display: inline-block; padding: 12px 30px; background: #e44848; color: #000000 !important; text-decoration: none; border-radius: 8px; margin: 20px 0 10px 0; font-weight: bold; }
+    a.button { color: #000000 !important; }
+    a.button:link { color: #000000 !important; }
+    a.button:visited { color: #000000 !important; }
+    a.button:hover { color: #000000 !important; }
+    a.button:active { color: #000000 !important; }
     .raw-link { font-size: 14px; color:#bbb; word-break: break-all; text-align:center; margin-top:6px; }
     .footer { text-align: center; margin-top: 20px; color: #888; font-size: 14px; }
   </style>
@@ -69,16 +74,17 @@ export async function sendInvitationEmail(params: SendInvitationParams): Promise
     <div class="content">
       <p>Hi ${userName},</p>
 
-      <p>${inviterName ? `${inviterName} has` : 'You have been'} invited you to collaborate ${projectName ? `on the project <strong>${projectName}</strong> ` : ''}with <strong>${companyName}</strong>.</p>
+      <p>${inviterName ? `${inviterName} has` : 'You have been'} invited to collaborate on <strong>${companyName}</strong> projects on the vercatryx system.</p>
 
       <p>To begin, please create your account using the button below:</p>
 
       <div style="text-align: center;">
-        <a href="${signupUrl}" class="button">Create Account</a>
+        <a href="${signupUrl}" class="button" style="display: inline-block; padding: 12px 30px; background: #e44848; color: #000000 !important; text-decoration: none; border-radius: 8px; margin: 20px 0 10px 0; font-weight: bold;">Create Account</a>
+        <p style="margin-top: 15px; margin-bottom: 5px; color: #bbb; font-size: 14px;">or just paste this in browser:</p>
         <div class="raw-link">${signupUrl}</div>
       </div>
 
-      <p>Once you sign up with <strong>${email}</strong>, you'll gain access to your project environment, files, and collaboration tools.</p>
+      <p>Once you sign up with <strong>${email}</strong>, you'll gain access to ${companyName}'s projects, files, and collaboration tools on the vercatryx system.</p>
 
       <p>If you have any questions, feel free to contact your administrator.</p>
 
@@ -97,11 +103,13 @@ export async function sendInvitationEmail(params: SendInvitationParams): Promise
     const textBody = `
 Hi ${userName},
 
-${inviterName ? `${inviterName} has` : 'You have been'} invited you to collaborate ${projectName ? `on the project "${projectName}" ` : ''}with ${companyName} on Vercatryx.
+${inviterName ? `${inviterName} has` : 'You have been'} invited to collaborate on ${companyName} projects on the vercatryx system.
 
 Create your account: ${signupUrl}
 
-Once you sign up with the email ${email}, you'll gain access to your project workspace and collaboration tools.
+or just paste this in browser: ${signupUrl}
+
+Once you sign up with the email ${email}, you'll gain access to ${companyName}'s projects, files, and collaboration tools on the vercatryx system.
 
 If you have any questions, feel free to reach out to your administrator.
 

@@ -6,6 +6,7 @@ import {
   deleteMeeting,
   updateMeetingStatus,
 } from '@/lib/meetings';
+import { getUserByClerkId, getUsersByClerkIds } from '@/lib/users';
 
 interface RouteContext {
   params: Promise<{ meetingId: string }>;
@@ -83,7 +84,23 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const body = await request.json();
-    const { status, ...updates } = body;
+    const { status, participantUserIds, ...otherUpdates } = body;
+
+    // Convert Clerk user IDs to database UUIDs if participantUserIds is provided
+    let participantDatabaseIds: string[] | undefined;
+    if (participantUserIds !== undefined) {
+      participantDatabaseIds = [];
+      if (Array.isArray(participantUserIds) && participantUserIds.length > 0) {
+        const dbUsers = await getUsersByClerkIds(participantUserIds);
+        dbUsers.forEach(user => participantDatabaseIds!.push(user.id));
+      }
+    }
+
+    // Prepare updates object
+    const updates: any = { ...otherUpdates };
+    if (participantDatabaseIds !== undefined) {
+      updates.participantUserIds = participantDatabaseIds;
+    }
 
     let updatedMeeting;
 

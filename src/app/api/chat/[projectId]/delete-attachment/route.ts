@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProjectMessages, updateProjectMessages } from '@/lib/chat';
+import { getProjectMessages, updateProjectMessages, deleteChatFile } from '@/lib/chat';
 import { auth } from '@clerk/nextjs/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 export async function DELETE(
   req: NextRequest,
@@ -29,17 +27,13 @@ export async function DELETE(
 
     console.log('Deleting attachment:', { messageId, attachmentUrl });
 
-    // Delete from local file system
+    // Delete from R2 storage
     try {
-      // Extract the file path from the URL (e.g., /chat-files/projectId/messageId/filename.ext)
-      const relativeFilePath = attachmentUrl.split('/chat-files/')[1];
-      const absoluteFilePath = path.join(process.cwd(), 'public', 'chat-files', relativeFilePath);
-      await fs.unlink(absoluteFilePath);
-      console.log('File deleted successfully from local storage');
+      await deleteChatFile(attachmentUrl);
+      console.log('File deleted successfully from R2 storage');
     } catch (fileError: any) {
-      if (fileError.code !== 'ENOENT') { // Ignore if file doesn't exist
-        console.error('Local file deletion error:', fileError);
-      }
+      console.error('R2 file deletion error:', fileError);
+      // Continue even if file deletion fails - we still want to remove it from the message
     }
 
     // Get messages and remove the attachment from the message

@@ -5,7 +5,7 @@ import { Meeting } from "@/lib/meetings";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Users, Video, Plus, Trash2, X, Link2, Copy } from "lucide-react";
+import { Calendar, Clock, Users, Video, Plus, Trash2, X, Link2, Copy, Loader2, Pencil, ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface SerializableUser {
   id: string;
@@ -55,6 +56,11 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
   const [companies, setCompanies] = useState<Company[]>(propCompanies || []);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [pastMeetingsOpen, setPastMeetingsOpen] = useState(false);
 
   // Form state for creating meetings
   const [formData, setFormData] = useState({
@@ -70,10 +76,11 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
   const refreshMeetings = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/meetings/upcoming');
+      // Fetch all meetings (not just upcoming) to match MeetingsClient
+      const response = await fetch('/api/meetings');
       if (response.ok) {
         const data = await response.json();
-        setMeetings(data.meetings);
+        setMeetings(data.meetings || []);
       }
     } catch (error) {
       console.error('Error refreshing meetings:', error);
@@ -152,8 +159,8 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
     const scheduledDate = new Date(meeting.scheduledAt);
     const endTime = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after scheduled time
 
-    // Can join 30 minutes before scheduled time
-    const joinableTime = new Date(scheduledDate.getTime() - 30 * 60 * 1000);
+    // Can join 2 hours before scheduled time
+    const joinableTime = new Date(scheduledDate.getTime() - 2 * 60 * 60 * 1000);
 
     return (
       (meeting.status === 'scheduled' || meeting.status === 'in-progress') &&
@@ -165,6 +172,9 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
   const handleCreateMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isCreating) return; // Prevent multiple submissions
+
+    setIsCreating(true);
     try {
       // Convert datetime-local to ISO string with proper timezone
       const scheduledAtISO = new Date(formData.scheduledAt).toISOString();
@@ -201,14 +211,19 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
     } catch (error) {
       console.error('Error creating meeting:', error);
       alert('Failed to create meeting');
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleDeleteMeeting = async (meetingId: string) => {
+    if (deletingMeetingId === meetingId) return; // Already deleting
+
     if (!confirm('Are you sure you want to delete this meeting?')) {
       return;
     }
 
+    setDeletingMeetingId(meetingId);
     try {
       const response = await fetch(`/api/meetings/${meetingId}`, {
         method: 'DELETE',
@@ -222,6 +237,8 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
     } catch (error) {
       console.error('Error deleting meeting:', error);
       alert('Failed to delete meeting');
+    } finally {
+      setDeletingMeetingId(null);
     }
   };
 
@@ -240,6 +257,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
 
   const closeCreateModal = () => {
     setShowCreateModal(false);
+    setEditingMeeting(null);
     setFormData({
       title: "",
       description: "",
@@ -249,6 +267,96 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       participantUserIds: [],
       participantCompanyIds: [],
     });
+  };
+
+  const handleEditMeeting = async (meeting: Meeting) => {
+    try {
+      // Fetch the meeting details
+      const response = await fetch(`/api/meetings/${meeting.id}`);
+      if (!response.ok) {
+        alert('Failed to load meeting details');
+        return;
+      }
+      const data = await response.json();
+      const fullMeeting = data.meeting;
+
+      // Convert database UUIDs to Clerk IDs for the form
+      const participantClerkIds: string[] = [];
+      if (fullMeeting.participantUserIds && fullMeeting.participantUserIds.length > 0) {
+        // Fetch users from database to get their Clerk IDs
+        for (const dbId of fullMeeting.participantUserIds) {
+          try {
+            const userResponse = await fetch(`/api/users/${dbId}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              if (userData.clerk_user_id) {
+                participantClerkIds.push(userData.clerk_user_id);
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching user ${dbId}:`, err);
+          }
+        }
+      }
+
+      // Format scheduledAt for datetime-local input (remove timezone info)
+      const scheduledDate = new Date(fullMeeting.scheduledAt);
+      const localDateTime = new Date(scheduledDate.getTime() - scheduledDate.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+
+      setFormData({
+        title: fullMeeting.title,
+        description: fullMeeting.description || "",
+        scheduledAt: localDateTime,
+        duration: fullMeeting.duration.toString(),
+        accessType: fullMeeting.accessType,
+        participantUserIds: participantClerkIds,
+        participantCompanyIds: fullMeeting.participantCompanyIds || [],
+      });
+      setEditingMeeting(fullMeeting);
+      setShowCreateModal(true);
+    } catch (error) {
+      console.error('Error loading meeting:', error);
+      alert('Failed to load meeting details');
+    }
+  };
+
+  const handleUpdateMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeeting || isUpdating) return;
+
+    setIsUpdating(true);
+    try {
+      const scheduledAtISO = new Date(formData.scheduledAt).toISOString();
+
+      const response = await fetch(`/api/meetings/${editingMeeting.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          scheduledAt: scheduledAtISO,
+          duration: parseInt(formData.duration),
+          accessType: formData.accessType,
+          participantUserIds: formData.participantUserIds,
+          participantCompanyIds: formData.participantCompanyIds,
+        }),
+      });
+
+      if (response.ok) {
+        await refreshMeetings();
+        closeCreateModal();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update meeting');
+      }
+    } catch (error) {
+      console.error('Error updating meeting:', error);
+      alert('Failed to update meeting');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const toggleParticipant = (userId: string) => {
@@ -291,10 +399,55 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
       .filter(Boolean) as string[];
   };
 
+  const getCompanyNames = (meeting: Meeting) => {
+    if (!companies || !isAdmin) return [];
+    return meeting.participantCompanyIds
+      .map(id => {
+        const company = companies.find(c => c.id === id);
+        return company?.name || null;
+      })
+      .filter(Boolean) as string[];
+  };
+
+  // Separate meetings into upcoming and past
+  // Filter out public meetings for non-superusers
+  const filteredMeetings = isAdmin 
+    ? meetings 
+    : meetings.filter(meeting => meeting.accessType !== 'public');
+
+  const now = new Date();
+  const upcomingMeetings = filteredMeetings
+    .filter((meeting) => {
+      const scheduledDate = new Date(meeting.scheduledAt);
+      const meetingEndTime = new Date(scheduledDate.getTime() + meeting.duration * 60 * 1000);
+      return now < meetingEndTime; // Meeting hasn't ended yet
+    })
+    .sort((a, b) => {
+      // Sort by scheduled time ascending (closest to now first)
+      const dateA = new Date(a.scheduledAt).getTime();
+      const dateB = new Date(b.scheduledAt).getTime();
+      return dateA - dateB;
+    });
+
+  const pastMeetings = filteredMeetings
+    .filter((meeting) => {
+      const scheduledDate = new Date(meeting.scheduledAt);
+      const meetingEndTime = new Date(scheduledDate.getTime() + meeting.duration * 60 * 1000);
+      const joinWindowEnd = new Date(scheduledDate.getTime() + 3 * 60 * 60 * 1000); // 3 hours after scheduled time
+      // Past if meeting ended but still within 3 hour join window
+      return now >= meetingEndTime && now <= joinWindowEnd;
+    })
+    .sort((a, b) => {
+      // Sort past meetings by scheduled time descending (most recent first)
+      const dateA = new Date(a.scheduledAt).getTime();
+      const dateB = new Date(b.scheduledAt).getTime();
+      return dateB - dateA;
+    });
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="bg-background border-border/50 text-foreground max-w-[95vw] w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-background border-border/50 text-foreground max-w-[95vw] w-full max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -319,7 +472,7 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
             </div>
           </DialogHeader>
 
-          <div className="mt-4">
+          <div className="mt-4 overflow-y-auto flex-1 pr-2">
             {loading ? (
               <div className="flex items-center justify-center py-24">
                 <div className="flex flex-col items-center gap-3">
@@ -327,10 +480,10 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                   <p className="text-muted-foreground text-sm">Loading meetings...</p>
                 </div>
               </div>
-            ) : meetings.length === 0 ? (
+            ) : upcomingMeetings.length === 0 && pastMeetings.length === 0 ? (
               <div className="text-center py-12">
                 <Video className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium text-foreground">No upcoming meetings</h3>
+                <h3 className="mt-4 text-lg font-medium text-foreground">No meetings</h3>
                 <p className="mt-2 text-muted-foreground">
                   You don't have any meetings scheduled at the moment.
                 </p>
@@ -342,8 +495,12 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                 )}
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                {meetings.map((meeting) => (
+              <>
+                {upcomingMeetings.length > 0 && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground mb-4">Upcoming Meetings</h2>
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+                      {upcomingMeetings.map((meeting) => (
                   <Card key={meeting.id} className="bg-card/80 border-border/50">
                     <CardHeader>
                       <div className="flex items-start justify-between">
@@ -373,10 +530,20 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           {meeting.accessType === 'public' ? (
                             <Badge className="bg-green-900/60 text-green-300">Public - Anyone with link</Badge>
                           ) : meeting.accessType === 'company' ? (
-                            <Badge className="bg-purple-900/60 text-purple-300">Company-wide</Badge>
-                          ) : getParticipantNames(meeting).length > 0 ? (
+                            isAdmin && getCompanyNames(meeting).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {getCompanyNames(meeting).map((name, idx) => (
+                                  <Badge key={idx} className="bg-purple-900/60 text-purple-300">
+                                    {name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <Badge className="bg-purple-900/60 text-purple-300">Company meeting</Badge>
+                            )
+                          ) : (meeting as any)._participantNames && (meeting as any)._participantNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {getParticipantNames(meeting).map((name, idx) => (
+                              {(meeting as any)._participantNames.map((name: string, idx: number) => (
                                 <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground">
                                   {name}
                                 </span>
@@ -406,13 +573,13 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                         </div>
                       )}
                     </CardContent>
-                    <CardFooter className={isAdmin ? "flex gap-2" : ""}>
+                    <CardFooter className={isAdmin ? "flex flex-wrap gap-2" : ""}>
                       {canJoinMeeting(meeting) ? (
                         <a
                           href={`/meetings/${meeting.id}/join`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={isAdmin ? "flex-1" : "w-full"}
+                          className={isAdmin ? "flex-1 min-w-[120px]" : "w-full"}
                         >
                           <Button className="w-full bg-brand-blue hover:bg-brand-blue-hover text-white" size="sm">
                             <Video className="mr-2 h-4 w-4" />
@@ -420,24 +587,177 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                           </Button>
                         </a>
                       ) : (
-                        <Button className={isAdmin ? "flex-1" : "w-full"} disabled size="sm">
+                        <Button className={isAdmin ? "flex-1 min-w-[120px]" : "w-full"} disabled size="sm">
                           Not Yet Available
                         </Button>
                       )}
                       {isAdmin && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteMeeting(meeting.id)}
-                          className="bg-red-500/80 hover:bg-red-500"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditMeeting(meeting)}
+                            disabled={isUpdating || deletingMeetingId === meeting.id}
+                            title="Edit Meeting"
+                            className="flex-shrink-0"
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteMeeting(meeting.id)}
+                            className="bg-red-500/80 hover:bg-red-500 flex-shrink-0"
+                            disabled={deletingMeetingId === meeting.id || isUpdating}
+                            title="Delete Meeting"
+                          >
+                            {deletingMeetingId === meeting.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </>
+                            )}
+                          </Button>
+                        </>
                       )}
                     </CardFooter>
                   </Card>
-                ))}
-              </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {pastMeetings.length > 0 && (
+                  <div className={upcomingMeetings.length > 0 ? "mt-8" : ""}>
+                    <Collapsible open={pastMeetingsOpen} onOpenChange={setPastMeetingsOpen}>
+                      <CollapsibleTrigger className="flex items-center justify-between w-full p-4 rounded-lg border border-border bg-card hover:bg-secondary transition-colors">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-xl font-semibold text-foreground">Past Meetings</h2>
+                          <Badge variant="outline" className="text-xs">
+                            {pastMeetings.length}
+                          </Badge>
+                        </div>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${pastMeetingsOpen ? 'rotate-180' : ''}`} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 mt-4">
+                          {pastMeetings.map((meeting) => (
+                            <Card key={meeting.id} className="bg-card/80 border-border/50">
+                              <CardHeader>
+                                <div className="flex items-start justify-between">
+                                  <CardTitle className="text-lg text-foreground">{meeting.title}</CardTitle>
+                                  {getStatusBadge(meeting.status)}
+                                </div>
+                                {meeting.description && (
+                                  <CardDescription className="text-muted-foreground text-sm">
+                                    {meeting.description}
+                                  </CardDescription>
+                                )}
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  <span>{formatDate(meeting.scheduledAt)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Clock className="h-4 w-4 text-muted-foreground" />
+                                  <span>
+                                    {formatTime(meeting.scheduledAt)} ({meeting.duration} min)
+                                  </span>
+                                </div>
+                                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                  <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                                  <div className="flex-1">
+                                    {meeting.accessType === 'public' ? (
+                                      <Badge className="bg-green-900/60 text-green-300">Public - Anyone with link</Badge>
+                                    ) : meeting.accessType === 'company' ? (
+                                      isAdmin && getCompanyNames(meeting).length > 0 ? (
+                                        <div className="flex flex-wrap gap-1">
+                                          {getCompanyNames(meeting).map((name, idx) => (
+                                            <Badge key={idx} className="bg-purple-900/60 text-purple-300">
+                                              {name}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <Badge className="bg-purple-900/60 text-purple-300">Company meeting</Badge>
+                                      )
+                                    ) : (meeting as any)._participantNames && (meeting as any)._participantNames.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {(meeting as any)._participantNames.map((name: string, idx: number) => (
+                                          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground">
+                                            {name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span>{meeting.participantUserIds.length + 1} participants</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                              <CardFooter className={isAdmin ? "flex flex-wrap gap-2" : ""}>
+                                {canJoinMeeting(meeting) ? (
+                                  <a
+                                    href={`/meetings/${meeting.id}/join`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={isAdmin ? "flex-1 min-w-[120px]" : "w-full"}
+                                  >
+                                    <Button className="w-full bg-brand-blue hover:bg-brand-blue-hover text-white" size="sm" variant="outline">
+                                      <Video className="mr-2 h-4 w-4" />
+                                      Join Meeting
+                                    </Button>
+                                  </a>
+                                ) : (
+                                  <Button className={isAdmin ? "flex-1 min-w-[120px]" : "w-full"} disabled size="sm" variant="outline">
+                                    Meeting Ended
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleEditMeeting(meeting)}
+                                      disabled={isUpdating || deletingMeetingId === meeting.id}
+                                      title="Edit Meeting"
+                                      className="flex-shrink-0"
+                                    >
+                                      <Pencil className="h-4 w-4 mr-2" />
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleDeleteMeeting(meeting.id)}
+                                      className="bg-red-500/80 hover:bg-red-500 flex-shrink-0"
+                                      disabled={deletingMeetingId === meeting.id || isUpdating}
+                                      title="Delete Meeting"
+                                    >
+                                      {deletingMeetingId === meeting.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete
+                                        </>
+                                      )}
+                                    </Button>
+                                  </>
+                                )}
+                              </CardFooter>
+                            </Card>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </DialogContent>
@@ -448,13 +768,13 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
         <Dialog open={showCreateModal} onOpenChange={closeCreateModal}>
           <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <DialogHeader>
-              <DialogTitle className="text-foreground">Create New Meeting</DialogTitle>
+              <DialogTitle className="text-foreground">{editingMeeting ? 'Edit Meeting' : 'Create New Meeting'}</DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                Schedule a meeting with one or more users
+                {editingMeeting ? 'Update meeting details' : 'Schedule a meeting with one or more users'}
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleCreateMeeting} className="space-y-4">
+            <form onSubmit={editingMeeting ? handleUpdateMeeting : handleCreateMeeting} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-foreground">Meeting Title</Label>
                 <Input
@@ -534,21 +854,44 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
                 <div className="space-y-2">
                   <Label className="text-foreground">Select Users ({formData.participantUserIds.length} selected)</Label>
                   <div className="border border-border/50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-secondary/30">
-                    {users.filter(u => (u.publicMetadata as any)?.role !== 'superuser').map((user) => (
-                      <div key={user.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`user-${user.id}`}
-                          checked={formData.participantUserIds.includes(user.id)}
-                          onCheckedChange={() => toggleParticipant(user.id)}
-                        />
-                        <label
-                          htmlFor={`user-${user.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {user.firstName} {user.lastName} ({user.emailAddresses[0]?.emailAddress})
-                        </label>
-                      </div>
-                    ))}
+                    {users && users.length > 0 ? (
+                      users
+                        .filter(u => (u.publicMetadata as any)?.role !== 'superuser')
+                        .sort((a, b) => {
+                          // Sort by name (first name + last name), then by email if no name
+                          const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim() || a.emailAddresses[0]?.emailAddress || '';
+                          const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.emailAddresses[0]?.emailAddress || '';
+                          return nameA.localeCompare(nameB);
+                        })
+                        .map((user) => {
+                          const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+                          const displayName = fullName || user.emailAddresses[0]?.emailAddress || 'Unknown User';
+                          const email = user.emailAddresses[0]?.emailAddress;
+                          
+                          return (
+                            <div key={user.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`user-${user.id}`}
+                                checked={formData.participantUserIds.includes(user.id)}
+                                onCheckedChange={() => toggleParticipant(user.id)}
+                              />
+                              <label
+                                htmlFor={`user-${user.id}`}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                              >
+                                <div className="flex flex-col">
+                                  <span>{displayName}</span>
+                                  {fullName && email && (
+                                    <span className="text-xs text-muted-foreground">{email}</span>
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+                          );
+                        })
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No users available</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -585,18 +928,27 @@ export default function MeetingsModal({ isOpen, onClose, isAdmin, userName, user
               )}
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeCreateModal}>
+                <Button type="button" variant="outline" onClick={closeCreateModal} disabled={isCreating || isUpdating}>
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={
-                    (formData.accessType === 'users' && formData.participantUserIds.length === 0) ||
-                    (formData.accessType === 'company' && formData.participantCompanyIds.length === 0)
+                    isCreating ||
+                    isUpdating ||
+                    (!editingMeeting && formData.accessType === 'users' && formData.participantUserIds.length === 0) ||
+                    (!editingMeeting && formData.accessType === 'company' && formData.participantCompanyIds.length === 0)
                   }
                   className="bg-brand-blue hover:bg-brand-blue-hover text-white"
                 >
-                  Create Meeting
+                  {(isCreating || isUpdating) ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {editingMeeting ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    editingMeeting ? 'Update Meeting' : 'Create Meeting'
+                  )}
                 </Button>
               </DialogFooter>
             </form>

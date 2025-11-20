@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, ExternalLink, FolderOpen, Building2 } from "lucide-react";
+import { Plus, Edit2, Trash2, X, ExternalLink, FolderOpen, Building2, ChevronDown, ChevronRight } from "lucide-react";
 import type { Company } from "@/types/company";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Project {
   id: string;
@@ -37,12 +38,35 @@ export default function ProjectsManagementNew({
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithCompany | null>(null);
   const [loading, setLoading] = useState(false);
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set(companies.map(c => c.id)));
   const [formData, setFormData] = useState({
     title: "",
     url: "",
     description: "",
     companyId: currentCompanyId || (companies.length > 0 ? companies[0].id : ""),
   });
+
+  // Group projects by company
+  const projectsByCompany = projects.reduce((acc, project) => {
+    const companyId = project.companyId;
+    if (!acc[companyId]) {
+      acc[companyId] = [];
+    }
+    acc[companyId].push(project);
+    return acc;
+  }, {} as Record<string, ProjectWithCompany[]>);
+
+  const toggleCompany = (companyId: string) => {
+    setExpandedCompanies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
 
   const openAddModal = () => {
     setEditingProject(null);
@@ -163,67 +187,107 @@ export default function ProjectsManagementNew({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            className="bg-card/80 rounded-lg p-6 border border-border/50 hover:border-border/50 transition-colors flex flex-col"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-5 h-5 text-blue-400" />
-                <h3 className="font-semibold text-lg">{project.title}</h3>
+      <div className="space-y-4">
+        {companies.map((company) => {
+          const companyProjects = projectsByCompany[company.id] || [];
+          const isExpanded = expandedCompanies.has(company.id);
+          
+          return (
+            <Collapsible
+              key={company.id}
+              open={isExpanded}
+              onOpenChange={() => toggleCompany(company.id)}
+            >
+              <div className="bg-card/80 rounded-lg border border-border/50 overflow-hidden">
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      )}
+                      <Building2 className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <h3 className="font-semibold text-lg text-left">{company.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {companyProjects.length} {companyProjects.length === 1 ? 'project' : 'projects'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent>
+                  <div className="p-4 pt-0">
+                    {companyProjects.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {companyProjects.map((project) => (
+                          <div
+                            key={project.id}
+                            className="bg-secondary/40 rounded-lg p-6 border border-border/50 hover:border-border transition-colors flex flex-col"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <FolderOpen className="w-5 h-5 text-blue-400" />
+                                <h3 className="font-semibold text-lg">{project.title}</h3>
+                              </div>
+                              {isSuperAdmin && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => openEditModal(project)}
+                                    className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
+                                    title="Edit project"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(project.id)}
+                                    className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
+                                    title="Delete project"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {project.description && (
+                              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
+                            )}
+
+                            <div className="mt-auto space-y-3">
+                              <a
+                                href={project.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 break-all"
+                              >
+                                <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{project.url}</span>
+                              </a>
+
+                              <div className="pt-3 border-t border-border/50">
+                                <p className="text-xs text-muted-foreground">
+                                  Created {new Date(project.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>No projects for this company</p>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
               </div>
-              {isSuperAdmin && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openEditModal(project)}
-                    className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
-                    title="Edit project"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(project.id)}
-                    className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
-                    title="Delete project"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {project.description && (
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
-            )}
-
-            <div className="mt-auto space-y-3">
-              <a
-                href={project.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 break-all"
-              >
-                <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{project.url}</span>
-              </a>
-
-              {isSuperAdmin && project.company && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Building2 className="w-4 h-4" />
-                  {project.company.name}
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-border/50">
-                <p className="text-xs text-muted-foreground">
-                  Created {new Date(project.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
+            </Collapsible>
+          );
+        })}
       </div>
 
       {projects.length === 0 && (
@@ -236,7 +300,7 @@ export default function ProjectsManagementNew({
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-background/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-card/95 rounded-lg p-6 max-w-lg w-full border border-border/50">
+          <div className="bg-card rounded-lg p-6 max-w-lg w-full border border-border/50 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">
                 {editingProject ? "Edit Project" : "Add Project"}
