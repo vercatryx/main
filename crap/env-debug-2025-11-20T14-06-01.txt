@@ -1,0 +1,42 @@
+Environment Variables Debug Report
+Generated: 2025-11-20T14:06:01.373Z
+Environment: development
+Vercel: No
+
+================================================================================
+
+SUPABASE CONFIGURATION:
+--------------------------------------------------------------------------------
+NEXT_PUBLIC_SUPABASE_URL: https://bbgzvviqpzcicsmkoyfk.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIs...
+
+verca_SUPABASE_URL: https://bbgzvviqpzcicsmkoyfk.supabase.co
+verca_SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIs...
+SUPABASE_SERVICE_ROLE_KEY: NOT SET
+
+ACTUAL VALUES USED BY getServerSupabaseClient():
+  URL: https://bbgzvviqpzcicsmkoyfk.supabase.co
+  URL Source: verca_SUPABASE_URL
+  Service Key Source: verca_SUPABASE_SERVICE_ROLE_KEY
+
+OTHER ENVIRONMENT VARIABLES:
+--------------------------------------------------------------------------------
+CLERK_SECRET_KEY: sk_test_4XrQuOPrLdGq...
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: /clients
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: /clients
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dG91Y2hlZC1j...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+NODE_ENV: development
+VERCEL: NOT SET
+VERCEL_ENV: NOT SET
+VERCEL_URL: NOT SET
+
+================================================================================
+
+NOTES:
+- Keys ending with "..." are redacted for security
+- ACTUAL_SERVER_SUPABASE_URL shows which URL getServerSupabaseClient() will use
+- URL Priority: verca_SUPABASE_URL > NEXT_PUBLIC_SUPABASE_URL
+- Service Key Priority: verca_SUPABASE_SERVICE_ROLE_KEY > SUPABASE_SERVICE_ROLE_KEY
+- Check if URLs start with "https://" - missing protocol causes DNS errors

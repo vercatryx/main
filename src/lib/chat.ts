@@ -88,23 +88,56 @@ export async function getProjectMessages(projectId: string): Promise<ChatMessage
 /**
  * Get all chat messages for a project (client-side)
  * Use this in React components with a client Supabase instance
+ * Falls back to API route if direct Supabase call fails
  */
 export async function getProjectMessagesClient(
   client: SupabaseClient,
   projectId: string
 ): Promise<ChatMessage[]> {
-  const { data, error } = await client
-    .from('chat_messages')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: true });
+  try {
+    const { data, error } = await client
+      .from('chat_messages')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching chat messages:', error);
+    if (error) {
+      console.error('Error fetching chat messages (direct Supabase):', error);
+      // Fallback to API route
+      console.log('Falling back to API route for chat messages');
+      return await getProjectMessagesViaAPI(projectId);
+    }
+
+    return (data || []).map(rowToMessage);
+  } catch (error) {
+    console.error('Exception fetching chat messages (direct Supabase):', error);
+    // Fallback to API route
+    console.log('Falling back to API route for chat messages');
+    return await getProjectMessagesViaAPI(projectId);
+  }
+}
+
+/**
+ * Fallback: Get chat messages via API route
+ * Used when direct Supabase client calls fail
+ */
+async function getProjectMessagesViaAPI(projectId: string): Promise<ChatMessage[]> {
+  try {
+    const response = await fetch(`/api/chat/${projectId}`, {
+      cache: 'no-store',
+    });
+    
+    if (!response.ok) {
+      console.error(`API route returned ${response.status}: ${response.statusText}`);
+      return [];
+    }
+    
+    const messages = await response.json();
+    return messages;
+  } catch (error) {
+    console.error('Error fetching chat messages via API route:', error);
     return [];
   }
-
-  return (data || []).map(rowToMessage);
 }
 
 /**

@@ -444,7 +444,9 @@ export default function ClientPortal({ projects, userName, companyName, user, is
       
       try {
         // Initial fetch of messages
+        console.log(`[Chat] Fetching messages for project: ${chatProjectId}`);
         const initialMessages = await getProjectMessagesClient(supabase, chatProjectId);
+        console.log(`[Chat] Received ${initialMessages.length} messages`);
         setMessages(initialMessages);
         setIsLoadingMessages(false);
         // Scroll to bottom after initial load
@@ -538,16 +540,23 @@ export default function ClientPortal({ projects, userName, companyName, user, is
             }
           });
       } catch (error) {
-        console.error('Error setting up chat subscription:', error);
+        console.error('[Chat] Error setting up chat subscription:', error);
+        console.error('[Chat] Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          projectId: chatProjectId,
+        });
         setIsLoadingMessages(false);
         // Fallback to polling on error
         pollFallback = setInterval(async () => {
           if (chatState !== 'closed') {
             try {
+              console.log(`[Chat] Polling fallback: fetching messages for ${chatProjectId}`);
               const messages = await getProjectMessagesClient(supabase, chatProjectId);
+              console.log(`[Chat] Polling fallback: received ${messages.length} messages`);
               setMessages(messages);
             } catch (error) {
-              console.error('Error fetching messages (fallback):', error);
+              console.error('[Chat] Error fetching messages (fallback):', error);
             }
           }
         }, 5000);
