@@ -39,7 +39,6 @@ export async function DELETE(
 
     // Wait for all file deletions to complete (or fail gracefully)
     await Promise.all(deletionPromises);
-    console.log(`Deleted ${deletionPromises.length} attachments from R2`);
 
     // Delete all messages from the database
     const supabase = getServerSupabaseClient();

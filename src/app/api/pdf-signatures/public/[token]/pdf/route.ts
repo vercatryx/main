@@ -29,10 +29,6 @@ export async function GET(
     }
 
     const key = getPdfKeyFromUrl(request.pdf_file_url);
-    console.log('[PDF public] Streaming PDF from R2', {
-      bucket: R2_BUCKET_NAME,
-      key,
-    });
 
     const command = new GetObjectCommand({
       Bucket: R2_BUCKET_NAME,
@@ -46,7 +42,6 @@ export async function GET(
     }
 
     const body = await streamToBuffer(object.Body);
-    console.log('[PDF public] Loaded PDF bytes', { key, size: body.length });
 
     // The underlying runtime accepts Node Buffers as response bodies, but the TypeScript
     // types for BodyInit are more strict (and don't include Buffer / Uint8Array here),

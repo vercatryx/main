@@ -6,10 +6,14 @@ const isPublicRoute = createRouteMatcher([
   "/contact",
   "/sign-up(.*)",
   "/sign-in(.*)",
+  // Public sign links so external users can sign documents without an account
+  "/sign/(.*)",
   // Public webhooks and APIs
   "/api/webhooks/clerk",
   "/api/availability(.*)",
   "/api/contact",
+  // Public PDF signature endpoints used by the sign page
+  "/api/pdf-signatures/public(.*)",
   // Public meeting token endpoint for guest access to public meetings
   "/api/meetings/(.*)/token",
   // Public access to meeting join links (authorization is enforced in route handlers)

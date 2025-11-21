@@ -31,10 +31,6 @@ export async function GET(
     }
 
     const key = getPdfKeyFromUrl(request.pdf_file_url);
-    console.log('[PDF admin] Streaming PDF from R2', {
-      bucket: R2_BUCKET_NAME,
-      key,
-    });
 
     const command = new GetObjectCommand({
       Bucket: R2_BUCKET_NAME,
@@ -48,7 +44,6 @@ export async function GET(
     }
 
     const body = await streamToBuffer(object.Body);
-    console.log('[PDF admin] Loaded PDF bytes', { key, size: body.length });
 
     return new NextResponse(new Uint8Array(body), {
       status: 200,

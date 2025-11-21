@@ -25,12 +25,9 @@ export async function DELETE(
       );
     }
 
-    console.log('Deleting attachment:', { messageId, attachmentUrl });
-
     // Delete from R2 storage
     try {
       await deleteChatFile(attachmentUrl);
-      console.log('File deleted successfully from R2 storage');
     } catch (fileError: any) {
       console.error('R2 file deletion error:', fileError);
       // Continue even if file deletion fails - we still want to remove it from the message
@@ -38,26 +35,20 @@ export async function DELETE(
 
     // Get messages and remove the attachment from the message
     const messages = await getProjectMessages(projectId);
-    console.log('Current messages count:', messages.length);
 
     const updatedMessages = messages.map(msg => {
       if (msg.id === messageId && msg.attachments) {
-        console.log('Found message with attachments:', msg.attachments.length);
         const deletedAttachment = msg.attachments.find(att => att.url === attachmentUrl);
         const remainingAttachments = msg.attachments.filter(att => att.url !== attachmentUrl);
-        console.log('Remaining attachments:', remainingAttachments.length);
 
         // If no attachments left and no message text, add deletion notice
         if (remainingAttachments.length === 0 && (!msg.message || !msg.message.trim())) {
-          console.log('No attachments left, adding deletion message');
           return {
             ...msg,
             message: deletedAttachment ? `"${deletedAttachment.filename}" was deleted` : 'Attachment was deleted',
             attachments: undefined
           };
         }
-
-        console.log('Keeping message with remaining attachments');
         return {
           ...msg,
           attachments: remainingAttachments.length > 0 ? remainingAttachments : undefined
@@ -68,11 +59,6 @@ export async function DELETE(
 
     // Save updated messages
     await updateProjectMessages(projectId, updatedMessages);
-
-    // No need for setTimeout for local file system
-    // await new Promise(resolve => setTimeout(resolve, 400));
-
-    console.log('Attachment deleted successfully, updated messages saved');
 
     return NextResponse.json({ success: true });
   } catch (error) {
