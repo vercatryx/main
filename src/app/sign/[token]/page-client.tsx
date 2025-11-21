@@ -81,6 +81,18 @@ export default function SignPageClient({ token }: SignPageClientProps) {
     img.src = signatureDataUrl;
   }, [showSignatureModal, signatureDataUrl]);
 
+  // When the signature modal is open, prevent the underlying page/PDF from scrolling
+  useEffect(() => {
+    if (!showSignatureModal) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showSignatureModal]);
+
   const getCanvasCoordinates = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -124,8 +136,21 @@ export default function SignPageClient({ token }: SignPageClientProps) {
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (signatureMode !== "draw") return;
+    // Prevent the page from scrolling/dragging on touch devices while drawing
+    e.preventDefault();
+    e.stopPropagation();
+
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Ensure we capture the pointer so drawing continues even if the finger/mouse
+    // leaves the canvas bounds slightly.
+    try {
+      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Not critical if this fails (e.g., some browsers)
+    }
+
     setDrawing(true);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -138,6 +163,10 @@ export default function SignPageClient({ token }: SignPageClientProps) {
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (signatureMode !== "draw") return;
     if (!drawing) return;
+    // Keep touch move from scrolling the modal/page
+    e.preventDefault();
+    e.stopPropagation();
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -148,8 +177,14 @@ export default function SignPageClient({ token }: SignPageClientProps) {
     ctx.stroke();
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     setDrawing(false);
+    // Release pointer capture when done drawing
+    try {
+      (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignore if unsupported
+    }
   };
 
   const generateTypedSignatureDataUrl = () => {
@@ -299,7 +334,7 @@ export default function SignPageClient({ token }: SignPageClientProps) {
         </section>
 
         {showSignatureModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-3 touch-none">
             <div className="bg-background rounded-lg shadow-xl w-full max-w-md p-4 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="text-center">
                 <h2 className="text-lg font-semibold">Add your signature</h2>
@@ -335,7 +370,8 @@ export default function SignPageClient({ token }: SignPageClientProps) {
                     ref={canvasRef}
                     width={400}
                     height={150}
-                    className="w-full h-[150px] bg-white cursor-crosshair"
+                    // touch-none ensures touch input is used for drawing only (no page scroll)
+                    className="w-full h-[150px] bg-white cursor-crosshair touch-none"
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
