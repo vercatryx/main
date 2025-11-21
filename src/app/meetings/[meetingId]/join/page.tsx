@@ -9,15 +9,6 @@ interface RouteParams {
 }
 
 async function JoinMeetingPage({ params }: RouteParams) {
-  const { userId } = await auth();
-
-  if (!userId) {
-    redirect('/sign-in');
-  }
-
-  // Map Clerk user ID to database user ID (used in meetings table)
-  const dbUser = await getUserByClerkId(userId);
-
   const { meetingId } = await params;
   const meeting = await getMeeting(meetingId);
 
@@ -31,6 +22,30 @@ async function JoinMeetingPage({ params }: RouteParams) {
       </div>
     );
   }
+
+  // Get current auth state (may be null for public meetings)
+  const { userId } = await auth();
+
+  // Public meetings: allow guests without sign-in
+  if (!userId && meeting.accessType === 'public') {
+    return (
+      <JitsiMeetClient
+        meeting={meeting}
+        // For guests, we don't have a real user ID; it's only used client-side
+        userId="guest"
+        displayName="Guest"
+        isSuperuser={false}
+      />
+    );
+  }
+
+  // Non-public meetings still require sign-in
+  if (!userId) {
+    redirect('/sign-in');
+  }
+
+  // Map Clerk user ID to database user ID (used in meetings table)
+  const dbUser = await getUserByClerkId(userId);
 
   // Check if user has access to this meeting
   // Note:

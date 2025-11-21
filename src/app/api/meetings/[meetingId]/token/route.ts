@@ -11,12 +11,6 @@ interface RouteContext {
 // GET /api/meetings/[meetingId]/token - Get JaaS JWT token for a meeting
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Check if JaaS is configured
     if (!isJaasConfigured()) {
       return NextResponse.json(
@@ -29,17 +23,47 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
-    // Map Clerk user ID to database user ID used in meetings table
-    const dbUser = await getUserByClerkId(userId);
-    const dbUserId = dbUser?.id ?? null;
-    const userCompanyId = dbUser?.company_id ?? null;
-
     const { meetingId } = await context.params;
     const meeting = await getMeeting(meetingId);
 
     if (!meeting) {
       return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
     }
+
+    // Get current auth state (may be null for public meetings)
+    const { userId } = await auth();
+
+    // Public meetings: allow guests without sign-in by issuing a guest token
+    if (!userId && meeting.accessType === 'public') {
+      const guestId = `guest-${meeting.id}-${Date.now()}`;
+      const userName = 'Guest';
+
+      const token = generateJaasToken({
+        roomName: meeting.jitsiRoomName,
+        userId: guestId,
+        userName,
+        userEmail: undefined,
+        userAvatar: undefined,
+        isModerator: false,
+        expiresInMinutes: 180,
+      });
+
+      return NextResponse.json({
+        token,
+        domain: '8x8.vc',
+        roomName: meeting.jitsiRoomName,
+      });
+    }
+
+    // Non-public meetings still require sign-in
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Map Clerk user ID to database user ID used in meetings table
+    const dbUser = await getUserByClerkId(userId);
+    const dbUserId = dbUser?.id ?? null;
+    const userCompanyId = dbUser?.company_id ?? null;
 
     // Check if user has access to this meeting
     // Note:

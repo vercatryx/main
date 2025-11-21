@@ -6,10 +6,16 @@ const isPublicRoute = createRouteMatcher([
   "/contact",
   "/sign-up(.*)",
   "/sign-in(.*)",
+  // Public webhooks and APIs
   "/api/webhooks/clerk",
   "/api/availability(.*)",
   "/api/contact",
-  "/admin/availability(.*)"
+  // Public meeting token endpoint for guest access to public meetings
+  "/api/meetings/(.*)/token",
+  // Public access to meeting join links (authorization is enforced in route handlers)
+  "/meetings/(.*)/join",
+  // Admin availability tools
+  "/admin/availability(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
