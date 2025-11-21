@@ -2,7 +2,7 @@
  * User management functions for company-based system
  */
 
-import { currentUser } from '@clerk/nextjs/server';
+import { currentUser, clerkClient } from '@clerk/nextjs/server';
 import { getServerSupabaseClient } from './supabase';
 import type {
   User,
@@ -12,6 +12,52 @@ import type {
   UserDisplayInfo,
   UserRole,
 } from '@/types/company';
+
+/**
+ * Helper to remove any users whose linked Clerk account is a superuser
+ */
+async function filterOutSuperUsers<T extends { clerk_user_id: string | null }>(
+  users: T[]
+): Promise<T[]> {
+  if (!users.length) return users;
+
+  // Collect Clerk user IDs we need to check
+  const clerkIds = Array.from(
+    new Set(
+      users
+        .map((u) => u.clerk_user_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  if (!clerkIds.length) return users;
+
+  try {
+    const client = await clerkClient();
+
+    const isSuperMap = new Map<string, boolean>();
+
+    await Promise.all(
+      clerkIds.map(async (id) => {
+        try {
+          const clerkUser = await client.users.getUser(id);
+          const role = (clerkUser.publicMetadata as any)?.role;
+          isSuperMap.set(id, role === 'superuser');
+        } catch (error) {
+          console.error('Error checking Clerk user role for filtering superusers:', error);
+          isSuperMap.set(id, false);
+        }
+      })
+    );
+
+    return users.filter(
+      (user) => !user.clerk_user_id || !isSuperMap.get(user.clerk_user_id)
+    );
+  } catch (error) {
+    console.error('Error filtering out super users:', error);
+    return users;
+  }
+}
 
 /**
  * Get user by Clerk user ID
@@ -185,7 +231,8 @@ export async function getUsersByCompany(companyId: string): Promise<User[]> {
       return [];
     }
 
-    return data || [];
+    const users = data || [];
+    return filterOutSuperUsers(users);
   } catch (error) {
     return [];
   }
@@ -215,8 +262,11 @@ export async function getAllUsers(): Promise<UserWithCompany[]> {
       return [];
     }
 
-    console.log(`getAllUsers returned ${data.length} users`);
-    return data as unknown as UserWithCompany[];
+    const filtered = await filterOutSuperUsers(data as unknown as UserWithCompany[]);
+    console.log(
+      `getAllUsers returned ${data.length} users, ${filtered.length} after filtering superusers`
+    );
+    return filtered;
   } catch (error) {
     console.error('Exception in getAllUsers:', error);
     return [];

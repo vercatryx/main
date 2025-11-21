@@ -5,11 +5,25 @@ import { redirect } from "next/navigation";
 import { getCompanyProjects, getProjectById } from "@/lib/projects";
 import { getCurrentUser, getUserWithCompany, getAllUsers } from "@/lib/users";
 import { getAllCompanies } from "@/lib/companies";
-import { isSuperAdmin } from "@/lib/permissions";
+import { isSuperAdmin, isUserIdSuperAdmin } from "@/lib/permissions";
 import { getUserAccessibleProjects } from "@/lib/user-project-permissions";
 import ClientPortal from "./page-client";
 import AccountSetupChecker from "@/components/account-setup-checker";
 import { ThemedSignIn } from "@/components/themed-signin";
+
+async function filterOutSuperUsers<T extends { clerk_user_id: string | null }>(
+  users: T[]
+): Promise<T[]> {
+  if (!users.length) return users;
+
+  const isSuperFlags = await Promise.all(
+    users.map((user) =>
+      user.clerk_user_id ? isUserIdSuperAdmin(user.clerk_user_id) : Promise.resolve(false)
+    )
+  );
+
+  return users.filter((_, index) => !isSuperFlags[index]);
+}
 
 export default async function ClientsPage() {
   const clerkUser = await currentUser();
@@ -44,7 +58,7 @@ export default async function ClientsPage() {
 
     // Fetch all companies and users for super admin
     const allCompanies = await getAllCompanies();
-    const allUsers = await getAllUsers();
+    const allUsers = await filterOutSuperUsers(await getAllUsers());
 
     return (
       <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center text-foreground">Loading...</div>}>

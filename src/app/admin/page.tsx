@@ -1,10 +1,24 @@
 import { redirect } from "next/navigation";
 import { currentUser as getClerkUser } from "@clerk/nextjs/server";
-import { getCurrentUser, isSuperAdmin, getUserPermissions } from "@/lib/permissions";
+import { getCurrentUser, isSuperAdmin, getUserPermissions, isUserIdSuperAdmin } from "@/lib/permissions";
 import { getAllCompanies, getCompanyById, getCompanyStats } from "@/lib/companies";
 import { getAllUsers, getUsersByCompany } from "@/lib/users";
 import { getAllProjects, getCompanyProjects } from "@/lib/projects";
 import AdminClientNew from "./page-client-new";
+
+async function filterOutSuperUsers<T extends { clerk_user_id: string | null }>(
+  users: T[]
+): Promise<T[]> {
+  if (!users.length) return users;
+
+  const isSuperFlags = await Promise.all(
+    users.map((user) =>
+      user.clerk_user_id ? isUserIdSuperAdmin(user.clerk_user_id) : Promise.resolve(false)
+    )
+  );
+
+  return users.filter((_, index) => !isSuperFlags[index]);
+}
 
 async function AdminDashboard() {
   // Check if user is super admin first (they don't need to be in database)
@@ -46,7 +60,8 @@ async function AdminDashboard() {
     );
     companies = companiesWithStats;
 
-    users = await getAllUsers();
+    // Exclude any database users that are actually super users in Clerk
+    users = await filterOutSuperUsers(await getAllUsers());
     projects = await getAllProjects();
   } else {
     // Company admin sees only their company

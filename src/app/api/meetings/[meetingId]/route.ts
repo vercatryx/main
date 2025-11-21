@@ -21,6 +21,11 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Map Clerk user ID to database user ID used in meetings table
+    const dbUser = await getUserByClerkId(userId);
+    const dbUserId = dbUser?.id ?? null;
+    const userCompanyId = dbUser?.company_id ?? null;
+
     const { meetingId } = await context.params;
     const meeting = await getMeeting(meetingId);
 
@@ -29,10 +34,35 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     // Check if user has access to this meeting
-    if (
-      meeting.hostUserId !== userId &&
-      !meeting.participantUserIds.includes(userId)
-    ) {
+    // Note:
+    // - meeting.hostUserId and participantUserIds store database user IDs
+    // - meeting.participantCompanyIds stores company IDs for company-wide meetings
+    // - accessType can be: 'users' | 'company' | 'public'
+    let hasAccess = false;
+
+    if (dbUserId !== null) {
+      if (
+        meeting.hostUserId === dbUserId ||
+        meeting.participantUserIds.includes(dbUserId)
+      ) {
+        hasAccess = true;
+      }
+
+      if (
+        !hasAccess &&
+        meeting.accessType === 'company' &&
+        userCompanyId &&
+        meeting.participantCompanyIds.includes(userCompanyId)
+      ) {
+        hasAccess = true;
+      }
+    }
+
+    if (!hasAccess && meeting.accessType === 'public') {
+      hasAccess = true;
+    }
+
+    if (!hasAccess) {
       const client = await clerkClient();
       const user = await client.users.getUser(userId);
       const publicMetadata = user.publicMetadata as { role?: 'superuser' | 'user' };

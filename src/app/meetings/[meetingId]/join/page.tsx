@@ -2,6 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getMeeting } from "@/lib/meetings";
 import { redirect } from "next/navigation";
 import JitsiMeetClient from "./page-client";
+import { getUserByClerkId } from "@/lib/users";
 
 interface RouteParams {
   params: Promise<{ meetingId: string }>;
@@ -13,6 +14,9 @@ async function JoinMeetingPage({ params }: RouteParams) {
   if (!userId) {
     redirect('/sign-in');
   }
+
+  // Map Clerk user ID to database user ID (used in meetings table)
+  const dbUser = await getUserByClerkId(userId);
 
   const { meetingId } = await params;
   const meeting = await getMeeting(meetingId);
@@ -29,9 +33,39 @@ async function JoinMeetingPage({ params }: RouteParams) {
   }
 
   // Check if user has access to this meeting
-  const hasAccess =
-    meeting.hostUserId === userId ||
-    meeting.participantUserIds.includes(userId);
+  // Note:
+  // - meeting.hostUserId and participantUserIds store database user IDs
+  // - meeting.participantCompanyIds stores company IDs for company-wide meetings
+  // - accessType can be: 'users' | 'company' | 'public'
+  const dbUserId = dbUser?.id ?? null;
+  const userCompanyId = dbUser?.company_id ?? null;
+
+  let hasAccess = false;
+
+  if (dbUserId !== null) {
+    // Host or explicitly invited user
+    if (
+      meeting.hostUserId === dbUserId ||
+      meeting.participantUserIds.includes(dbUserId)
+    ) {
+      hasAccess = true;
+    }
+
+    // Company-wide meeting: any user whose company is in participantCompanyIds
+    if (
+      !hasAccess &&
+      meeting.accessType === 'company' &&
+      userCompanyId &&
+      meeting.participantCompanyIds.includes(userCompanyId)
+    ) {
+      hasAccess = true;
+    }
+  }
+
+  // Public meetings: any authenticated user may join
+  if (!hasAccess && meeting.accessType === 'public') {
+    hasAccess = true;
+  }
 
   if (!hasAccess) {
     const client = await clerkClient();

@@ -117,7 +117,9 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
               enabled: false,
             },
             disableDeepLinking: true,
-            hideConferenceSubject: false,
+            // Hide Jitsi's default conference subject/timer header
+            hideConferenceSubject: true,
+            hideConferenceTimer: true,
           },
           interfaceConfigOverwrite: {
             TOOLBAR_BUTTONS: [
