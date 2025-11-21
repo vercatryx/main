@@ -50,7 +50,7 @@ export async function GET(
     const body = await streamToBuffer(object.Body);
     console.log('[PDF admin] Loaded PDF bytes', { key, size: body.length });
 
-    return new NextResponse(body, {
+    return new NextResponse(new Uint8Array(body), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

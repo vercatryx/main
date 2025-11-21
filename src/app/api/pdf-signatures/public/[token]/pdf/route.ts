@@ -48,7 +48,10 @@ export async function GET(
     const body = await streamToBuffer(object.Body);
     console.log('[PDF public] Loaded PDF bytes', { key, size: body.length });
 
-    return new NextResponse(body, {
+    // The underlying runtime accepts Node Buffers as response bodies, but the TypeScript
+    // types for BodyInit are more strict (and don't include Buffer / Uint8Array here),
+    // so we cast to any to satisfy the compiler while preserving the correct runtime behavior.
+    return new NextResponse(body as any, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

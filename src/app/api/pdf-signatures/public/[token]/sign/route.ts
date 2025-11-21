@@ -24,7 +24,6 @@ export async function POST(
     const ip =
       req.headers.get('x-forwarded-for') ||
       req.headers.get('x-real-ip') ||
-      req.ip ||
       undefined;
 
     const { signedPdfUrl } = await saveSignatureForRequest({
