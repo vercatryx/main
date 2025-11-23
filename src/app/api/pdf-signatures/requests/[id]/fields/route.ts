@@ -22,6 +22,7 @@ export async function PATCH(
         width: Number(f.width),
         height: Number(f.height),
         label: typeof f.label === 'string' ? f.label : null,
+        field_type: f.field_type === 'data_entry' ? 'data_entry' : 'signature',
       })),
     });
 

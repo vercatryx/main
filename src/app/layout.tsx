@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ThemeProvider } from "@/contexts/theme-context";
 import "@/styles/globals.css";
 import { ThemeRegistry } from "@/components/theme-registry";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "Vercatryx",
@@ -53,7 +54,10 @@ export default function RootLayout({
             }}
           />
           <ThemeRegistry />
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

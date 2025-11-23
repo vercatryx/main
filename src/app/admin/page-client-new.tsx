@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature } from "lucide-react";
+import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
+import { toast } from "sonner";
 import CompaniesManagement from "@/components/admin/companies-management";
 import UsersManagementNew from "@/components/admin/users-management-new";
 import ProjectsManagementNew from "@/components/admin/projects-management-new";
@@ -57,6 +58,8 @@ export default function AdminClientNew({
   const [signatureRequests, setSignatureRequests] = useState<SignatureRequest[]>([]);
   const [loadingSignatureRequests, setLoadingSignatureRequests] = useState(false);
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
+  const [requestSignatures, setRequestSignatures] = useState<Record<string, { signed_pdf_url: string | null }[]>>({});
+  const [copyingLinkId, setCopyingLinkId] = useState<string | null>(null);
 
   // Refresh all data by reloading the page
   const handleRefresh = () => {
@@ -94,6 +97,30 @@ export default function AdminClientNew({
         const data = await res.json();
         if (!cancelled && Array.isArray(data.requests)) {
           setSignatureRequests(data.requests);
+          
+          // Fetch signatures for each request
+          const signaturesMap: Record<string, { signed_pdf_url: string | null }[]> = {};
+          await Promise.all(
+            data.requests.map(async (req: SignatureRequest) => {
+              try {
+                const sigRes = await fetch(`/api/pdf-signatures/requests/${req.id}/signatures`, {
+                  cache: "no-store",
+                });
+                if (sigRes.ok && !cancelled) {
+                  const sigData = await sigRes.json();
+                  signaturesMap[req.id] = Array.isArray(sigData.signatures) 
+                    ? sigData.signatures 
+                    : [];
+                }
+              } catch (err) {
+                console.error(`Error loading signatures for request ${req.id}:`, err);
+                signaturesMap[req.id] = [];
+              }
+            })
+          );
+          if (!cancelled) {
+            setRequestSignatures(signaturesMap);
+          }
         }
       } catch (err) {
         console.error("Error loading signature requests:", err);
@@ -335,83 +362,142 @@ export default function AdminClientNew({
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {signatureRequests.map((req) => (
-                    <div
-                      key={req.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-border/60 rounded-lg px-3 py-2"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-medium">{req.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Created{" "}
-                          {new Date(req.created_at).toLocaleString(undefined, {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
+                  {signatureRequests.map((req) => {
+                    const signatures = requestSignatures[req.id] || [];
+                    const signedPdfs = signatures.filter(sig => sig.signed_pdf_url);
+                    
+                    return (
+                      <div
+                        key={req.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-border/60 rounded-lg px-3 py-2"
+                      >
+                        <div className="space-y-0.5 flex-1">
+                          <div className="font-medium">{req.title}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Created{" "}
+                            {new Date(req.created_at).toLocaleString(undefined, {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </div>
+                          {signedPdfs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {signedPdfs.map((sig, idx) => (
+                                <a
+                                  key={idx}
+                                  href={sig.signed_pdf_url || "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                                >
+                                  View signed PDF {signedPdfs.length > 1 ? `#${idx + 1}` : ""}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs ${
+                              req.status === "completed"
+                                ? "bg-green-500/20 text-green-400"
+                                : req.status === "sent"
+                                ? "bg-yellow-500/20 text-yellow-300"
+                                : "bg-slate-500/20 text-slate-200"
+                            }`}
+                          >
+                            {req.status === "completed"
+                              ? "Completed"
+                              : req.status === "sent"
+                              ? "Sent"
+                              : "Draft"}
+                          </span>
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded border border-border text-xs hover:bg-muted disabled:opacity-60 flex items-center gap-1"
+                            disabled={copyingLinkId === req.id}
+                            onClick={async () => {
+                              const signingLink = `${typeof window !== "undefined" ? window.location.origin : ""}/sign/${req.public_token}`;
+                              try {
+                                setCopyingLinkId(req.id);
+                                await navigator.clipboard.writeText(signingLink);
+                                toast.success("Signing link copied to clipboard!", {
+                                  duration: 2000,
+                                });
+                              } catch (err) {
+                                // Fallback if clipboard fails
+                                const textArea = document.createElement("textarea");
+                                textArea.value = signingLink;
+                                textArea.style.position = "fixed";
+                                textArea.style.opacity = "0";
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                try {
+                                  document.execCommand("copy");
+                                  toast.success("Signing link copied to clipboard!", {
+                                    duration: 2000,
+                                  });
+                                } catch (fallbackErr) {
+                                  toast.error("Failed to copy link", {
+                                    description: "Please copy manually: " + signingLink,
+                                  });
+                                }
+                                document.body.removeChild(textArea);
+                              } finally {
+                                setTimeout(() => setCopyingLinkId(null), 1500);
+                              }
+                            }}
+                          >
+                            <Copy className="w-3 h-3" />
+                            {copyingLinkId === req.id ? "Copied!" : "Copy link"}
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded border border-border text-xs hover:bg-muted disabled:opacity-60"
+                            disabled={deletingRequestId === req.id}
+                            onClick={async () => {
+                              if (!confirm("Delete this signature request and all its PDFs?")) {
+                                return;
+                              }
+                              try {
+                                setDeletingRequestId(req.id);
+                                const res = await fetch(`/api/pdf-signatures/requests/${req.id}`, {
+                                  method: "DELETE",
+                                });
+                                if (!res.ok) {
+                                  const data = await res.json().catch(() => ({}));
+                                  throw new Error(data.error || "Failed to delete request");
+                                }
+                                setSignatureRequests((prev) =>
+                                  prev.filter((r) => r.id !== req.id)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                                alert(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Failed to delete signature request"
+                                );
+                              } finally {
+                                setDeletingRequestId(null);
+                              }
+                            }}
+                          >
+                            {deletingRequestId === req.id ? "Deleting…" : "Delete"}
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-secondary text-xs"
+                            onClick={() => {
+                              window.location.href = `/admin/signatures/${req.id}`;
+                            }}
+                          >
+                            Open
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs ${
-                            req.status === "completed"
-                              ? "bg-green-500/20 text-green-400"
-                              : req.status === "sent"
-                              ? "bg-yellow-500/20 text-yellow-300"
-                              : "bg-slate-500/20 text-slate-200"
-                          }`}
-                        >
-                          {req.status === "completed"
-                            ? "Completed"
-                            : req.status === "sent"
-                            ? "Sent"
-                            : "Draft"}
-                        </span>
-                        <button
-                          type="button"
-                          className="px-3 py-1 rounded border border-border text-xs hover:bg-muted disabled:opacity-60"
-                          disabled={deletingRequestId === req.id}
-                          onClick={async () => {
-                            if (!confirm("Delete this signature request and all its PDFs?")) {
-                              return;
-                            }
-                            try {
-                              setDeletingRequestId(req.id);
-                              const res = await fetch(`/api/pdf-signatures/requests/${req.id}`, {
-                                method: "DELETE",
-                              });
-                              if (!res.ok) {
-                                const data = await res.json().catch(() => ({}));
-                                throw new Error(data.error || "Failed to delete request");
-                              }
-                              setSignatureRequests((prev) =>
-                                prev.filter((r) => r.id !== req.id)
-                              );
-                            } catch (err) {
-                              console.error(err);
-                              alert(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Failed to delete signature request"
-                              );
-                            } finally {
-                              setDeletingRequestId(null);
-                            }
-                          }}
-                        >
-                          {deletingRequestId === req.id ? "Deleting…" : "Delete"}
-                        </button>
-                        <button
-                          type="button"
-                          className="px-3 py-1 rounded bg-secondary text-xs"
-                          onClick={() => {
-                            window.location.href = `/admin/signatures/${req.id}`;
-                          }}
-                        >
-                          Open
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

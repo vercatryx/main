@@ -12,6 +12,8 @@ export interface PdfSignatureField {
   width: number;
   height: number;
   label: string | null;
+  field_type?: 'signature' | 'data_entry';
+  signature_image_url?: string | null;
 }
 
 export interface PdfSignatureRequest {
@@ -22,6 +24,7 @@ export interface PdfSignatureRequest {
   public_token: string;
   created_at: string;
   updated_at: string;
+  submitted_at?: string | null;
   fields?: PdfSignatureField[];
 }
 
@@ -250,6 +253,7 @@ export async function savePdfSignatureFields(params: {
         width: field.width,
         height: field.height,
         label: field.label,
+        field_type: field.field_type || 'signature',
       }))
     )
     .select();
@@ -300,11 +304,47 @@ export async function markRequestAsSent(requestId: string): Promise<void> {
   }
 }
 
+export async function submitPdfSignatureRequest(token: string): Promise<{ signedPdfUrl: string | null }> {
+  const supabase = getServerSupabaseClient();
+
+  const request = await getPdfSignatureRequestByToken(token);
+  if (!request) {
+    throw new Error('Request not found');
+  }
+
+  // Check if already submitted
+  if (request.submitted_at) {
+    throw new Error('Request has already been submitted');
+  }
+
+  const { error } = await supabase
+    .from('pdf_signature_requests')
+    .update({ 
+      submitted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', request.id);
+
+  if (error) {
+    console.error('Error submitting PDF signature request:', error);
+    throw new Error('Failed to submit request');
+  }
+
+  // Get the latest signed PDF URL from the signatures table
+  const signatures = await getSignaturesForRequest(request.id);
+  const signedPdfUrl = signatures.length > 0 && signatures[0].signed_pdf_url 
+    ? signatures[0].signed_pdf_url 
+    : null;
+
+  return { signedPdfUrl };
+}
+
 export async function saveSignatureForRequest(params: {
   token: string;
   signerName?: string;
   signerEmail?: string;
   signerIp?: string;
+  fieldId: string;
   signatureImageDataUrl: string;
 }): Promise<{ signedPdfUrl: string }> {
   const supabase = getServerSupabaseClient();
@@ -314,13 +354,74 @@ export async function saveSignatureForRequest(params: {
     throw new Error('Request not found');
   }
 
+  // Prevent saving signatures if the request has been submitted
+  if (request.submitted_at) {
+    throw new Error('This document has already been submitted and cannot be modified');
+  }
+
   if (!request.fields || request.fields.length === 0) {
     throw new Error('No signature fields configured');
   }
 
-  // Download original PDF from R2
-  const originalUrl = new URL(request.pdf_file_url);
-  const keyFromUrl = originalUrl.pathname.replace(/^\//, '');
+  // Find the field being signed
+  const targetField = request.fields.find((f) => f.id === params.fieldId);
+  if (!targetField) {
+    throw new Error('Field not found');
+  }
+
+  // Upload signature image to R2 and get URL
+  const match = params.signatureImageDataUrl.match(/^data:(.+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid signature image data');
+  }
+  const imageBytes = Buffer.from(match[2], 'base64');
+  const imageKey = `pdf-signatures/signatures/${request.id}/${params.fieldId}-${Date.now()}.png`;
+  
+  const putImageCommand = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: imageKey,
+    Body: imageBytes,
+    ContentType: 'image/png',
+  });
+
+  await r2Client.send(putImageCommand);
+  const signatureImageUrl = `${R2_PUBLIC_URL}/${imageKey}`;
+
+  // Update the field with the signature image URL
+  const { error: fieldUpdateError } = await supabase
+    .from('pdf_signature_fields')
+    .update({ signature_image_url: signatureImageUrl })
+    .eq('id', params.fieldId)
+    .eq('request_id', request.id);
+
+  if (fieldUpdateError) {
+    console.error('Error updating field signature:', fieldUpdateError);
+    throw new Error('Failed to save field signature');
+  }
+
+  // Reload fields to get all signatures
+  const updatedRequest = await getPdfSignatureRequestByToken(params.token);
+  if (!updatedRequest || !updatedRequest.fields) {
+    throw new Error('Failed to reload request');
+  }
+
+  // Check if all fields are completed (both signature fields and data_entry fields)
+  // Both field types store their data in signature_image_url, so we check all fields
+  const allFieldsSigned = updatedRequest.fields.length > 0 && updatedRequest.fields.every(
+    (field) => field.signature_image_url !== null && field.signature_image_url !== undefined
+  );
+
+  // Get existing signatures to check if we need to update or create a signature record
+  const existingSignatures = await getSignaturesForRequest(request.id);
+
+  // Always use the original PDF as the base to avoid layering old signatures on top of new ones
+  // When a signature is updated, we want to start fresh from the original PDF and only draw
+  // the current signatures from the database, not build on top of previously signed PDFs
+  const basePdfUrl = request.pdf_file_url;
+
+  // Download base PDF from R2
+  const baseUrl = new URL(basePdfUrl);
+  const keyFromUrl = baseUrl.pathname.replace(/^\//, '');
 
   const getPdfCommand = new GetObjectCommand({
     Bucket: R2_BUCKET_NAME,
@@ -329,25 +430,38 @@ export async function saveSignatureForRequest(params: {
 
   const pdfObject = await r2Client.send(getPdfCommand);
   if (!pdfObject.Body) {
-    throw new Error('Failed to download original PDF');
+    throw new Error('Failed to download base PDF');
   }
 
   const pdfBytes = await streamToBuffer(pdfObject.Body);
 
-  // Decode signature image
-  const match = params.signatureImageDataUrl.match(/^data:(.+);base64,(.+)$/);
-  if (!match) {
-    throw new Error('Invalid signature image data');
-  }
-  const imageBytes = Buffer.from(match[2], 'base64');
-
   // Manipulate PDF
   const pdfDoc = await PDFDocument.load(pdfBytes);
-  const pngImage = await pdfDoc.embedPng(imageBytes);
 
-  const fields = request.fields;
+  // Apply signatures to all fields that have signatures
+  for (const field of updatedRequest.fields) {
+    if (!field.signature_image_url) {
+      continue; // Skip fields without signatures
+    }
 
-  for (const field of fields) {
+    // Download signature image from R2
+    const sigUrl = new URL(field.signature_image_url);
+    const sigKey = sigUrl.pathname.replace(/^\//, '');
+    
+    const getSigCommand = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: sigKey,
+    });
+
+    const sigObject = await r2Client.send(getSigCommand);
+    if (!sigObject.Body) {
+      console.warn(`Failed to download signature for field ${field.id}`);
+      continue;
+    }
+
+    const sigBytes = await streamToBuffer(sigObject.Body);
+    const pngImage = await pdfDoc.embedPng(sigBytes);
+
     const pageIndex = Math.max(0, Math.min(pdfDoc.getPageCount() - 1, field.page_number - 1));
     const page = pdfDoc.getPage(pageIndex);
     const { width, height } = page.getSize();
@@ -364,11 +478,28 @@ export async function saveSignatureForRequest(params: {
     const yFromBottom = 1 - field.y - field.height;
     const y = yFromBottom * height;
 
+    // Get the actual signature image dimensions (not the canvas size)
+    const sigWidth = pngImage.width;
+    const sigHeight = pngImage.height;
+
+    // Calculate scale factors for both dimensions
+    // The limiting factor will determine the final scale
+    const scaleWidth = fieldWidth / sigWidth;
+    const scaleHeight = fieldHeight / sigHeight;
+
+    // Use the smaller scale factor (limiting factor) to maintain aspect ratio
+    // This ensures the signature fits within the field box without distortion
+    const scale = Math.min(scaleWidth, scaleHeight);
+
+    // Calculate final dimensions maintaining original proportions
+    const finalWidth = sigWidth * scale;
+    const finalHeight = sigHeight * scale;
+
     page.drawImage(pngImage, {
       x,
       y,
-      width: fieldWidth,
-      height: fieldHeight,
+      width: finalWidth,
+      height: finalHeight,
     });
   }
 
@@ -387,28 +518,62 @@ export async function saveSignatureForRequest(params: {
 
   const signedPdfUrl = `${R2_PUBLIC_URL}/${signedKey}`;
 
-  // Store signature record
-  const { error: insertError } = await supabase.from('pdf_signatures').insert({
-    request_id: request.id,
-    signer_name: params.signerName || null,
-    signer_email: params.signerEmail || null,
-    signer_ip: params.signerIp || null,
-    signature_image_url: null,
-    signed_pdf_url: signedPdfUrl,
-  });
+  // Store or update signature record
+  if (existingSignatures.length > 0) {
+    // Update existing signature record
+    const { error: updateError } = await supabase
+      .from('pdf_signatures')
+      .update({
+        signed_pdf_url: signedPdfUrl,
+        signer_name: params.signerName || null,
+        signer_email: params.signerEmail || null,
+        signer_ip: params.signerIp || null,
+      })
+      .eq('id', existingSignatures[0].id);
 
-  if (insertError) {
-    console.error('Error saving PDF signature record:', insertError);
+    if (updateError) {
+      console.error('Error updating PDF signature record:', updateError);
+    }
+  } else {
+    // Create new signature record
+    const { error: insertError } = await supabase.from('pdf_signatures').insert({
+      request_id: request.id,
+      signer_name: params.signerName || null,
+      signer_email: params.signerEmail || null,
+      signer_ip: params.signerIp || null,
+      signature_image_url: null,
+      signed_pdf_url: signedPdfUrl,
+    });
+
+    if (insertError) {
+      console.error('Error saving PDF signature record:', insertError);
+    }
   }
 
-  // Mark request as completed
-  const { error: updateError } = await supabase
-    .from('pdf_signature_requests')
-    .update({ status: 'completed', updated_at: new Date().toISOString() })
-    .eq('id', request.id);
+  // Mark request as completed only if ALL fields (both signature and data_entry) are filled
+  // This ensures the document is only considered fully signed when every field is completed
+  if (allFieldsSigned) {
+    const { error: updateError } = await supabase
+      .from('pdf_signature_requests')
+      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .eq('id', request.id);
 
-  if (updateError) {
-    console.error('Error updating request status to completed:', updateError);
+    if (updateError) {
+      console.error('Error updating request status to completed:', updateError);
+    }
+  } else {
+    // Ensure status is not 'completed' if not all fields are filled
+    // This handles the case where fields might have been removed or if status was incorrectly set
+    if (request.status === 'completed') {
+      const { error: updateError } = await supabase
+        .from('pdf_signature_requests')
+        .update({ status: 'sent', updated_at: new Date().toISOString() })
+        .eq('id', request.id);
+
+      if (updateError) {
+        console.error('Error reverting request status from completed:', updateError);
+      }
+    }
   }
 
   return { signedPdfUrl };
