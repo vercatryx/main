@@ -20,7 +20,7 @@ export async function GET(
     
     // Try to get from params first
     try {
-      const resolvedParams = await params();
+      const resolvedParams = await params;
       trackingId = resolvedParams?.trackingId || '';
       console.log(`[Email Tracking] Got tracking ID from params: ${trackingId}`);
     } catch (paramError) {
@@ -77,7 +77,8 @@ export async function GET(
     if (!trackingId || trackingId === "undefined" || trackingId.length < 10) {
       console.error(`[Email Tracking] Invalid tracking ID after cleaning: ${trackingId}`);
       // Return transparent pixel even if tracking fails
-      return new NextResponse(getTransparentPixel(), {
+      // Cast to any to satisfy TypeScript (Buffer works at runtime)
+      return new NextResponse(getTransparentPixel() as any, {
         headers: {
           "Content-Type": "image/png",
           "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -103,7 +104,8 @@ export async function GET(
     }
 
     // Return 1x1 transparent PNG
-    return new NextResponse(getTransparentPixel(), {
+    // Cast to any to satisfy TypeScript (Buffer works at runtime)
+    return new NextResponse(getTransparentPixel() as any, {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -114,7 +116,8 @@ export async function GET(
   } catch (error) {
     console.error("Error in tracking pixel endpoint:", error);
     // Still return the pixel even if there's an error
-    return new NextResponse(getTransparentPixel(), {
+    // Cast to any to satisfy TypeScript (Buffer works at runtime)
+    return new NextResponse(getTransparentPixel() as any, {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -124,7 +127,7 @@ export async function GET(
 }
 
 /**
- * Returns a 1x1 transparent PNG as base64
+ * Returns a 1x1 transparent PNG as a Buffer
  * This is a minimal valid PNG file
  */
 function getTransparentPixel(): Buffer {
