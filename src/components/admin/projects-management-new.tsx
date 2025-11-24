@@ -41,7 +41,7 @@ export default function ProjectsManagementNew({
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set(companies.map(c => c.id)));
   const [formData, setFormData] = useState({
     title: "",
-    url: "",
+    url: "http://vercatryx.com/projects/blank",
     description: "",
     companyId: currentCompanyId || (companies.length > 0 ? companies[0].id : ""),
   });
@@ -72,7 +72,7 @@ export default function ProjectsManagementNew({
     setEditingProject(null);
     setFormData({
       title: "",
-      url: "",
+      url: "http://vercatryx.com/projects/blank",
       description: "",
       companyId: currentCompanyId || (companies.length > 0 ? companies[0].id : ""),
     });
@@ -191,7 +191,7 @@ export default function ProjectsManagementNew({
         {companies.map((company) => {
           const companyProjects = projectsByCompany[company.id] || [];
           const isExpanded = expandedCompanies.has(company.id);
-          
+
           return (
             <Collapsible
               key={company.id}
@@ -217,7 +217,7 @@ export default function ProjectsManagementNew({
                     </div>
                   </div>
                 </CollapsibleTrigger>
-                
+
                 <CollapsibleContent>
                   <div className="p-4 pt-0">
                     {companyProjects.length > 0 ? (

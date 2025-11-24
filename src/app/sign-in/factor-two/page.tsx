@@ -3,7 +3,7 @@
 import { useUser } from "@clerk/nextjs";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import LogoWineFill from "@/components/loading";
+import AnimatedLogo from "@/components/AnimatedLogo";
 
 export default function FactorTwoPage() {
   const { isSignedIn, isLoaded } = useUser();
@@ -20,9 +20,10 @@ export default function FactorTwoPage() {
   return (
     <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <div className="text-center">
-        <LogoWineFill
-          width={300}
-          duration={10}
+        <AnimatedLogo
+          width="300px"
+          height="300px"
+          speed={5}
         />
         <p className="mt-6 text-muted-foreground text-lg">
           {!isLoaded ? "Verifying..." : isSignedIn ? "Loading your workspace..." : "Verifying your code..."}

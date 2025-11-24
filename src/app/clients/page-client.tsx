@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SignOutButton, useUser, useAuth } from "@clerk/nextjs";
 import MeetingsModal from "@/components/client/meetings-modal";
-import LogoWineFill from "@/components/loading";
+import AnimatedLogo from "@/components/AnimatedLogo";
 import { getClientSupabaseClient } from "@/lib/supabase";
 import { getProjectMessagesClient, rowToMessage } from "@/lib/chat";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -2135,9 +2135,10 @@ export default function ClientPortal({ projects, userName, companyName, user, is
               {isProjectLoading && (
                 <div className="absolute inset-0 bg-background flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-3">
-                    <LogoWineFill
-                      width={300}
-                      duration={10}
+                    <AnimatedLogo
+                      width="300px"
+                      height="300px"
+                      speed={5}
                     />
                     <p className="text-muted-foreground text-lg mt-4">Loading {selectedProject.title}...</p>
                   </div>

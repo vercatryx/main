@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Home } from "lucide-react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import LogoWineFill from "@/components/loading";
+import AnimatedLogo from "@/components/AnimatedLogo";
 import { useTheme } from "@/contexts/theme-context";
 
 export default function SignInPage() {
@@ -27,9 +27,10 @@ export default function SignInPage() {
     return (
       <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
         <div className="text-center">
-          <LogoWineFill
-            width={300}
-            duration={10}
+          <AnimatedLogo
+            width="300px"
+            height="300px"
+            speed={5}
           />
           <p className="mt-6 text-muted-foreground text-lg">
             {!isLoaded ? "Loading..." : "Loading your workspace..."}

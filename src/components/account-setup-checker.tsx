@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
-import LogoWineFill from "@/components/loading";
+import AnimatedLogo from "@/components/AnimatedLogo";
 
 interface AccountSetupCheckerProps {
   clerkUserId: string;
@@ -58,9 +58,10 @@ export default function AccountSetupChecker({ clerkUserId, userEmail }: AccountS
       <main className="min-h-screen bg-background text-foreground">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <LogoWineFill
-              width={300}
-              duration={10}
+            <AnimatedLogo
+              width="300px"
+              height="300px"
+              speed={5}
             />
             <h1 className="text-3xl font-bold mb-4 text-foreground mt-6">
               Setting Up Your Account...

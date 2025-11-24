@@ -29,12 +29,12 @@ interface CompaniesManagementProps {
   onDataChange?: () => void;
 }
 
-export default function CompaniesManagement({ 
-  initialCompanies, 
+export default function CompaniesManagement({
+  initialCompanies,
   initialUsers,
   initialProjects,
   currentUser,
-  onDataChange 
+  onDataChange
 }: CompaniesManagementProps) {
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [users, setUsers] = useState<UserWithCompany[]>(initialUsers);
@@ -60,7 +60,7 @@ export default function CompaniesManagement({
   });
   const [projectFormData, setProjectFormData] = useState({
     title: "",
-    url: "",
+    url: "http://vercatryx.com/projects/blank",
     description: "",
     companyId: "",
   });
@@ -152,7 +152,7 @@ export default function CompaniesManagement({
     setEditingProject(null);
     setProjectFormData({
       title: "",
-      url: "",
+      url: "http://vercatryx.com/projects/blank",
       description: "",
       companyId: companyId,
     });

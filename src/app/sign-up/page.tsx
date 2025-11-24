@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense, useRef } from "react";
 import { verifyInvitationToken } from "@/lib/invitations";
 import { useTheme } from "@/contexts/theme-context";
-import LogoWineFill from "@/components/loading";
+import AnimatedLogo from "@/components/AnimatedLogo";
 
 function SignUpContent() {
   const searchParams = useSearchParams();
@@ -187,9 +187,10 @@ function SignUpContent() {
           {!clerkLoaded && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className="text-center">
-                <LogoWineFill
-                  width={200}
-                  duration={10}
+                <AnimatedLogo
+                  width="200px"
+                  height="200px"
+                  speed={5}
                 />
               </div>
             </div>
