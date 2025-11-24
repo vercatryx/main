@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Copy, UserPlus, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import AnimatedLogo from "@/components/AnimatedLogo";
 
 interface JitsiMeetClientProps {
   meeting: Meeting;
@@ -350,8 +351,12 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
         {isLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
             <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-              <p className="text-foreground text-lg">Joining {meeting.title}...</p>
+              <AnimatedLogo
+                width="300px"
+                height="300px"
+                speed={5}
+              />
+              <p className="text-foreground text-lg mt-6">Joining {meeting.title}...</p>
             </div>
           </div>
         )}

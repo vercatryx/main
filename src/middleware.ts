@@ -20,6 +20,8 @@ const isPublicRoute = createRouteMatcher([
   "/meetings/(.*)/join",
   // Admin availability tools
   "/admin/availability(.*)",
+  // Email tracking pixel - must be public so email clients can load it
+  "/api/admin/email/track/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

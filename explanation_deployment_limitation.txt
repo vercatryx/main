@@ -1,9 +1,0 @@
-I understand you'd prefer me to update the live site directly. However, I am an AI agent operating within your local file system. I do not have the capability or credentials to deploy code to remote servers or directly update live websites like `dietfantasy-nkw6.vercel.app`.
-
-The changes I've made are to the local copy of the `dietfantasy` project located in the `dietfantasy copy` folder on your machine.
-
-For these changes to take effect on the live `dietfantasy-nkw6.vercel.app` site, you would need to:
-1.  Apply these same changes to the source code of your *actual* `dietfantasy` project (the one you use for deployment).
-2.  Then, deploy that updated project to Vercel (or wherever it is hosted).
-
-I can only modify files on your local machine.

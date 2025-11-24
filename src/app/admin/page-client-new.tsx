@@ -1,13 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy } from "lucide-react";
+import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy, Mail } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 import { toast } from "sonner";
 import CompaniesManagement from "@/components/admin/companies-management";
 import UsersManagementNew from "@/components/admin/users-management-new";
 import ProjectsManagementNew from "@/components/admin/projects-management-new";
+import EmailSender from "@/components/admin/email-sender";
+import EmailHistory from "@/components/admin/email-history";
 import type { Company, User } from "@/types/company";
+
+// Email tab component to manage shared state
+function EmailTabContent() {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleEmailSent = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  return (
+    <div className="space-y-6">
+      <EmailSender onEmailSent={handleEmailSent} />
+      <EmailHistory refreshTrigger={refreshTrigger} />
+    </div>
+  );
+}
 
 interface UserWithCompany extends User {
   company: Company;
@@ -33,7 +51,7 @@ interface AdminClientNewProps {
   isSuperAdmin: boolean;
 }
 
-type TabType = "companies" | "users" | "projects" | "signatures";
+type TabType = "companies" | "users" | "projects" | "signatures" | "email";
 
 interface SignatureRequest {
   id: string;
@@ -227,6 +245,17 @@ export default function AdminClientNew({
               Signatures
             </button>
           )}
+          <button
+            onClick={() => setActiveTab("email")}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+              activeTab === "email"
+                ? "border-blue-600 text-blue-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Mail className="w-5 h-5" />
+            Email
+          </button>
         </div>
       </div>
 
@@ -502,6 +531,10 @@ export default function AdminClientNew({
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "email" && (
+          <EmailTabContent />
         )}
       </div>
     </div>

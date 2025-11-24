@@ -27,8 +27,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
-.env
-.env.example
+.env.local
 
 # vercel
 .vercel
@@ -37,8 +36,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# data files
-/data/*.json
+# data files (local storage for dev/testing)
+/data/
+/.data/
 
 # IDE
 .idea
@@ -46,7 +46,20 @@ next-env.d.ts
 *.swp
 *.swo
 *~
-.env.local
-.data
+
+# Keys
 *.pk
 *.pub
+
+# Test/migration scripts (local only)
+test-*.js
+test-*.ts
+
+# Explanation/documentation files (local only)
+explanation*.txt
+
+# Temp directories
+/crap/
+
+# Clerk temp files
+.clerk/.tmp/
