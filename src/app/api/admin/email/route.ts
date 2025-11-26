@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
     // Create plain text version
     let textContent = textBody || htmlBody?.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\n+/g, "\n") || "";
     if (textContent) {
-      textContent = `${textContent}\n\n---\nBest regards,\n${adminName}\nVercatryx Team`;
+      textContent = `${textContent}\nBest regards,\n${adminName}\nVercatryx Team`;
     }
 
     // Prepare attachments for nodemailer
