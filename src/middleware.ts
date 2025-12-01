@@ -22,6 +22,9 @@ const isPublicRoute = createRouteMatcher([
   "/admin/availability(.*)",
   // Email tracking pixel - must be public so email clients can load it
   "/api/admin/email/track/(.*)",
+  // SEO files - sitemap and robots.txt
+  "/sitemap.xml",
+  "/robots.txt",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
