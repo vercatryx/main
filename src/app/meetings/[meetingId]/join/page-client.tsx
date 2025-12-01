@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Meeting } from "@/lib/meetings";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, UserPlus, Check } from "lucide-react";
+import { ArrowLeft, Copy, UserPlus, Check, MousePointer2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import AnimatedLogo from "@/components/AnimatedLogo";
@@ -36,6 +36,10 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
   const [users, setUsers] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [inviting, setInviting] = useState(false);
+  const [pointerModeEnabled, setPointerModeEnabled] = useState(false);
+  const [sharingParticipantId, setSharingParticipantId] = useState<string | null>(null);
+  const pointerOverlayRef = useRef<HTMLDivElement | null>(null);
+  const mouseMoveHandlerRef = useRef<((e: MouseEvent) => void) | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -181,7 +185,69 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
               console.error('Error updating meeting status:', error);
             }
           }
+          
+          // If the sharing participant left, clear the sharing state
+          if (event.id === sharingParticipantId) {
+            setSharingParticipantId(null);
+            if (pointerModeEnabled) {
+              setPointerModeEnabled(false);
+            }
+          }
         });
+
+        // Listen for screen sharing events
+        jitsiApiRef.current.addEventListener('participantVideoTypeChanged', async (event: any) => {
+          const participantId = event.id;
+          const videoType = event.videoType;
+          
+          console.log('Participant video type changed:', { participantId, videoType, isSuperuser, pointerModeEnabled });
+          
+          // Check if this participant is sharing their screen (desktop track)
+          if (videoType === 'desktop') {
+            console.log('Desktop sharing detected for participant:', participantId);
+            // If we're a superuser and pointer mode is enabled, track this participant
+            if (isSuperuser && pointerModeEnabled) {
+              console.log('Setting sharing participant ID for superuser:', participantId);
+              setSharingParticipantId(participantId);
+            } else if (!isSuperuser) {
+              // If we're not a superuser and someone is sharing, we might receive pointer messages
+              console.log('Non-superuser detected screen sharing');
+              setSharingParticipantId(participantId);
+            }
+          } else if (videoType === 'camera' && participantId === sharingParticipantId) {
+            // Participant stopped sharing
+            console.log('Participant stopped sharing');
+            setSharingParticipantId(null);
+            if (isSuperuser && pointerModeEnabled) {
+              setPointerModeEnabled(false);
+            }
+          }
+        });
+        
+        // Also listen for when participants join to detect screen sharing
+        jitsiApiRef.current.addEventListener('participantJoined', async (event: any) => {
+          console.log('Participant joined:', event);
+        });
+
+        // Listen for pointer messages (for non-superusers receiving pointer)
+        if (!isSuperuser) {
+          jitsiApiRef.current.addEventListener('endpointTextMessageReceived', (event: any) => {
+            console.log('Non-superuser received endpoint message:', event);
+            try {
+              const message = JSON.parse(event.text);
+              console.log('Parsed message:', message);
+              if (message.type === 'remote-pointer') {
+                console.log('Displaying pointer at:', message.x, message.y);
+                // Display the pointer overlay - we assume if we receive this message,
+                // a superuser is pointing on our shared screen
+                displayPointerOverlay(message.x, message.y);
+              }
+            } catch (error) {
+              // Not a JSON message, ignore
+              console.log('Message is not JSON, ignoring:', error);
+            }
+          });
+        }
 
       } catch (err) {
         console.error('Error initializing Jitsi:', err);
@@ -197,8 +263,17 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
       if (jitsiApiRef.current) {
         jitsiApiRef.current.dispose();
       }
+      // Clean up pointer overlay
+      if (pointerOverlayRef.current) {
+        pointerOverlayRef.current.remove();
+        pointerOverlayRef.current = null;
+      }
+      if (mouseMoveHandlerRef.current) {
+        document.removeEventListener('mousemove', mouseMoveHandlerRef.current);
+        mouseMoveHandlerRef.current = null;
+      }
     };
-  }, [meeting.id, meeting.jitsiRoomName, displayName, router, jwtToken]);
+  }, [meeting.id, meeting.jitsiRoomName, displayName, router, jwtToken, isSuperuser]);
 
   const handleLeave = () => {
     if (jitsiApiRef.current) {
@@ -268,6 +343,181 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
     }
   };
 
+  // Display pointer overlay (for non-superusers)
+  const displayPointerOverlay = (x: number, y: number) => {
+    const jitsiContainer = jitsiContainerRef.current;
+    if (!jitsiContainer) {
+      console.log('Pointer overlay: No Jitsi container found');
+      return;
+    }
+
+    if (!pointerOverlayRef.current) {
+      // Create pointer overlay element - use fixed positioning to sit on top of iframe
+      const overlay = document.createElement('div');
+      overlay.id = 'remote-pointer-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #3b82f6;
+        border: 3px solid white;
+        pointer-events: none;
+        z-index: 999999;
+        display: block;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(59, 130, 246, 0.3);
+        transition: left 0.05s ease-out, top 0.05s ease-out;
+      `;
+      
+      // Append to body so it's on top of everything
+      document.body.appendChild(overlay);
+      pointerOverlayRef.current = overlay;
+      console.log('Pointer overlay created');
+    }
+
+    if (pointerOverlayRef.current && jitsiContainer) {
+      // Try to find the iframe and calculate position relative to it
+      const iframe = jitsiContainer.querySelector('iframe');
+      let targetRect: DOMRect;
+      
+      if (iframe) {
+        // Use iframe position - the shared screen video is typically in the main area
+        targetRect = iframe.getBoundingClientRect();
+      } else {
+        // Fallback to container
+        targetRect = jitsiContainer.getBoundingClientRect();
+      }
+      
+      // Calculate position - x and y are percentages (0-100) of the shared screen
+      const left = targetRect.left + (targetRect.width * x / 100);
+      const top = targetRect.top + (targetRect.height * y / 100);
+      
+      pointerOverlayRef.current.style.left = `${left}px`;
+      pointerOverlayRef.current.style.top = `${top}px`;
+      pointerOverlayRef.current.style.display = 'block';
+      
+      console.log('Pointer overlay positioned at:', { x, y, left, top, containerWidth: targetRect.width, containerHeight: targetRect.height });
+      
+      // Hide after 3 seconds of no movement (will be updated on next movement)
+      clearTimeout((pointerOverlayRef.current as any).hideTimeout);
+      (pointerOverlayRef.current as any).hideTimeout = setTimeout(() => {
+        if (pointerOverlayRef.current) {
+          pointerOverlayRef.current.style.display = 'none';
+        }
+      }, 3000);
+    }
+  };
+
+  // Toggle pointer mode (superuser only)
+  const handleTogglePointerMode = async () => {
+    if (!isSuperuser || !jitsiApiRef.current) return;
+
+    const newPointerMode = !pointerModeEnabled;
+    setPointerModeEnabled(newPointerMode);
+    console.log('Pointer mode toggled:', newPointerMode);
+
+    if (newPointerMode) {
+      // Find who is sharing their screen
+      try {
+        const participants = await jitsiApiRef.current.getParticipantsInfo();
+        console.log('All participants:', participants);
+        let foundSharing = false;
+        for (const participant of participants) {
+          console.log('Checking participant:', participant);
+          if (participant.videoType === 'desktop') {
+            console.log('Found sharing participant:', participant.participantId);
+            setSharingParticipantId(participant.participantId);
+            foundSharing = true;
+            break;
+          }
+        }
+        if (!foundSharing) {
+          console.log('No one is sharing yet, pointer mode will activate when someone shares');
+          // No one is sharing yet, but enable pointer mode so it activates when someone shares
+          // The participantVideoTypeChanged event will set the sharingParticipantId
+        }
+      } catch (error) {
+        console.error('Error getting participants:', error);
+      }
+    } else {
+      // Clean up mouse tracking
+      const container = jitsiContainerRef.current;
+      if (container && mouseMoveHandlerRef.current) {
+        container.removeEventListener('mousemove', mouseMoveHandlerRef.current);
+        mouseMoveHandlerRef.current = null;
+      }
+      setSharingParticipantId(null);
+    }
+  };
+
+  // Track mouse position on shared screen and send pointer coordinates
+  useEffect(() => {
+    if (!isSuperuser || !pointerModeEnabled || !sharingParticipantId || !jitsiApiRef.current) {
+      // Clean up if conditions not met
+      if (mouseMoveHandlerRef.current) {
+        const container = jitsiContainerRef.current;
+        if (container && mouseMoveHandlerRef.current) {
+          container.removeEventListener('mousemove', mouseMoveHandlerRef.current);
+        }
+        mouseMoveHandlerRef.current = null;
+      }
+      return;
+    }
+
+    const container = jitsiContainerRef.current;
+    if (!container) return;
+
+    // Track mouse on the entire Jitsi container
+    // Since the shared screen typically takes up the main area, we'll use the container dimensions
+      const handleMouseMove = (e: MouseEvent) => {
+        // Try to find the iframe to get more accurate positioning
+        const iframe = container.querySelector('iframe');
+        let targetRect: DOMRect;
+        
+        if (iframe) {
+          targetRect = iframe.getBoundingClientRect();
+        } else {
+          targetRect = container.getBoundingClientRect();
+        }
+        
+        // Calculate position relative to the target (iframe or container)
+        // This should match where the shared screen video is displayed
+        const x = ((e.clientX - targetRect.left) / targetRect.width) * 100;
+        const y = ((e.clientY - targetRect.top) / targetRect.height) * 100;
+
+        // Only send if mouse is over the target area
+        if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+          try {
+            const message = {
+              type: 'remote-pointer',
+              x,
+              y,
+              timestamp: Date.now()
+            };
+            console.log('Superuser sending pointer message to', sharingParticipantId, ':', message);
+            
+            // Try sendEndpointMessage - this sends to a specific participant
+            if (jitsiApiRef.current && sharingParticipantId) {
+              jitsiApiRef.current.sendEndpointMessage(sharingParticipantId, JSON.stringify(message));
+            }
+          } catch (error) {
+            console.error('Error sending pointer message:', error);
+          }
+        }
+      };
+
+    container.addEventListener('mousemove', handleMouseMove);
+    mouseMoveHandlerRef.current = handleMouseMove;
+
+    return () => {
+      if (container && mouseMoveHandlerRef.current) {
+        container.removeEventListener('mousemove', mouseMoveHandlerRef.current);
+        mouseMoveHandlerRef.current = null;
+      }
+    };
+  }, [isSuperuser, pointerModeEnabled, sharingParticipantId]);
+
   if (error) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
@@ -307,6 +557,24 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
         {/* Meeting Controls */}
         <div className="flex items-center gap-2">
           {isSuperuser && (
+            <>
+              <Button
+                onClick={handleTogglePointerMode}
+                variant={pointerModeEnabled ? "default" : "outline"}
+                size="sm"
+                className={pointerModeEnabled 
+                  ? "bg-blue-500 hover:bg-blue-600 text-white" 
+                  : "bg-secondary border-border text-foreground hover:bg-secondary"
+                }
+                title={pointerModeEnabled 
+                  ? "Click to turn off pointer" 
+                  : sharingParticipantId 
+                    ? "Click to show your pointer on shared screen" 
+                    : "Enable pointer mode (will activate when someone shares their screen)"}
+              >
+                <MousePointer2 className="mr-2 h-4 w-4" />
+                {pointerModeEnabled ? "Pointer On" : "Show Pointer"}
+              </Button>
             <Button
               onClick={handleOpenInviteModal}
               variant="outline"
@@ -316,6 +584,7 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
               <UserPlus className="mr-2 h-4 w-4" />
               Invite
             </Button>
+            </>
           )}
           <Button
             onClick={handleCopyLink}
