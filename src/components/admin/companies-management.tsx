@@ -486,20 +486,26 @@ export default function CompaniesManagement({
                       </div>
                     </div>
                     <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => openEditCompanyModal(company)}
-                        className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openEditCompanyModal(company); }}
+                        className="p-1.5 hover:bg-secondary/60 rounded transition-colors cursor-pointer"
                         title="Edit company"
                       >
                         <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
+                      </div>
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleDelete(company.id)}
-                        className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDelete(company.id); }}
+                        className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400 cursor-pointer"
                         title="Delete company"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </CollapsibleTrigger>
@@ -661,20 +667,26 @@ export default function CompaniesManagement({
                                   <h3 className="font-semibold text-lg">{project.title}</h3>
                                 </div>
                                 <div className="flex gap-2">
-                                  <button
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => openEditProjectModal(project)}
-                                    className="p-1.5 hover:bg-secondary/60 rounded transition-colors"
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openEditProjectModal(project); }}
+                                    className="p-1.5 hover:bg-secondary/60 rounded transition-colors cursor-pointer"
                                     title="Edit project"
                                   >
                                     <Edit2 className="w-4 h-4" />
-                                  </button>
-                                  <button
+                                  </div>
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => handleDeleteProject(project.id)}
-                                    className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400"
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDeleteProject(project.id); }}
+                                    className="p-1.5 hover:bg-red-500/20/40 rounded transition-colors text-red-400 cursor-pointer"
                                     title="Delete project"
                                   >
                                     <Trash2 className="w-4 h-4" />
-                                  </button>
+                                  </div>
                                 </div>
                               </div>
 

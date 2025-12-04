@@ -18,14 +18,10 @@ export const config = {
   matcher: [
     // Skip Next.js internals and static files
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Protect all API routes (including /api/admin/payments)
-    '/api(.*)',
-    // Protect admin and client pages
+    // Protect API routes including admin payments
+    '/api/admin/payments(.*)',
+    // Your existing protected routes like /admin, /clients, etc.
     '/admin(.*)',
     '/clients(.*)',
-    // Add other protected paths like /projects, /meetings, etc.
-    '/projects(.*)',
-    '/meetings(.*)',
-    '/payments(.*)',  // Protect payments if needed, but allow public access via links
   ],
 };

@@ -1,25 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useStripe } from '@stripe/react-stripe-js';
+import { useState, useEffect, Suspense } from 'react';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { updatePaymentRequestStatus } from '@/lib/payments';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface PaymentIntent {
   id: string;
   amount: number;
+  status: string;
   metadata: {
     originalAmount: string;
     fee: string;
+    public_token?: string;
+    method?: string;
+    payer_email?: string;
   };
 }
 
-export default function SuccessPage() {
-  const stripe = useStripe();
+function SuccessPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
@@ -28,14 +34,61 @@ export default function SuccessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(true);
   const [error, setError] = useState('');
+  const [statusUpdated, setStatusUpdated] = useState(false);
+  const [isACH, setIsACH] = useState(false);
+  const [stripe, setStripe] = useState<Stripe | null>(null);
 
   const clientSecret = searchParams.get('client_secret');
 
   useEffect(() => {
+    stripePromise.then((stripeInstance) => {
+      if (stripeInstance) {
+        setStripe(stripeInstance);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (clientSecret && stripe) {
       stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
-        if (paymentIntent && paymentIntent.status === 'succeeded') {
-          setPaymentIntent(paymentIntent as PaymentIntent);
+        if (paymentIntent) {
+          const metadata = (paymentIntent as any).metadata || {};
+          const pi: PaymentIntent = {
+            id: paymentIntent.id,
+            amount: paymentIntent.amount,
+            status: paymentIntent.status,
+            metadata: {
+              originalAmount: metadata.originalAmount || '0',
+              fee: metadata.fee || '0',
+              public_token: metadata.public_token,
+              method: metadata.method,
+              payer_email: metadata.payer_email,
+            },
+          };
+          const achMethod = pi.metadata.method === 'ach';
+          if (pi.status === 'succeeded' || (achMethod && pi.status === 'processing')) {
+            setPaymentIntent(pi);
+            setIsACH(achMethod);
+            if (achMethod && pi.metadata.payer_email) {
+              setEmail(pi.metadata.payer_email);
+            }
+
+            // If public_token in metadata, update status
+            if (pi.metadata.public_token) {
+              updatePaymentRequestStatus(pi.metadata.public_token, 'completed')
+                .then(() => {
+                  setStatusUpdated(true);
+                  toast.success('Payment recorded successfully!');
+                })
+                .catch((err) => {
+                  console.error('Failed to update payment status:', err);
+                  toast.error('Payment completed, but recording failed. Contact support.');
+                });
+            }
+          } else {
+            setError('Payment not confirmed as successful.');
+            router.push('/payments');
+          }
         } else {
           setError('Payment not confirmed as successful.');
           router.push('/payments');
@@ -45,6 +98,9 @@ export default function SuccessPage() {
         setError('Failed to verify payment.');
         router.push('/payments');
       });
+    } else if (clientSecret && !stripe) {
+      // Wait for Stripe to load
+      return;
     } else {
       setError('No payment information found.');
       router.push('/payments');
@@ -67,12 +123,17 @@ export default function SuccessPage() {
   }
 
   const originalAmount = parseFloat(paymentIntent.metadata.originalAmount);
-  const fee = parseFloat(paymentIntent.metadata.fee);
+  const fee = parseFloat(paymentIntent.metadata.fee || '0');
   const total = paymentIntent.amount / 100;
+  const payerEmail = paymentIntent.metadata.payer_email;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) {
+    let submitEmail = email;
+    if (isACH && payerEmail && !submitEmail) {
+      submitEmail = payerEmail;
+    }
+    if (!name || !submitEmail) {
       setError('Please provide your name and email.');
       return;
     }
@@ -86,7 +147,7 @@ export default function SuccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          email,
+          email: submitEmail,
           originalAmount,
           fee,
           total,
@@ -108,6 +169,10 @@ export default function SuccessPage() {
     setIsSubmitting(false);
   };
 
+  const successMessage = isACH 
+    ? 'Your ACH payment has been initiated and will be processed within 2-3 business days.' 
+    : 'Thank you for your payment.';
+
   return (
     <div className="container mx-auto py-8 max-w-md">
       <Card>
@@ -115,7 +180,7 @@ export default function SuccessPage() {
           <img src="/logo-big.svg" alt="Vercatryx Logo" className="mx-auto h-12 w-auto mb-4" />
           <CardTitle>Payment Successful!</CardTitle>
           <CardDescription>
-            Thank you for your payment. Total charged: ${total.toFixed(2)}
+            {successMessage} Total charged: ${total.toFixed(2)}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -141,8 +206,10 @@ export default function SuccessPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    required
+                    required={!(isACH && payerEmail)}
+                    disabled={!!(isACH && payerEmail)}
                   />
+                  {isACH && payerEmail && <p className="text-xs text-muted-foreground">Email prefilled from payment.</p>}
                 </div>
                 <Button type="submit" disabled={isSubmitting} className="w-full">
                   {isSubmitting ? 'Sending...' : 'Send Invoice'}
@@ -161,5 +228,24 @@ export default function SuccessPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto py-8">
+        <Card className="max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <CardTitle>Loading...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-center">Please wait...</p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <SuccessPageContent />
+    </Suspense>
   );
 }

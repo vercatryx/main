@@ -1,10 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import PDFDocument from 'pdfkit';
+import { updatePaymentRequestStatus } from '@/lib/payments';
+
+function initializePdfMake() {
+  try {
+    const pdfMake = require('pdfmake/build/pdfmake');
+    const pdfFonts = require('pdfmake/build/vfs_fonts');
+    
+    if (pdfFonts?.pdfMake?.vfs) {
+      pdfMake.vfs = pdfFonts.pdfMake.vfs;
+    } else if (pdfFonts?.vfs) {
+      pdfMake.vfs = pdfFonts.vfs;
+    } else if (pdfFonts) {
+      pdfMake.vfs = pdfFonts;
+    }
+    
+    return pdfMake;
+  } catch (error) {
+    console.error('Error loading pdfMake fonts:', error);
+    throw new Error('Failed to initialize PDF library');
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, originalAmount, fee, total, paymentIntentId } = await request.json();
+    const { name, email, originalAmount, fee, total, paymentIntentId, public_token } = await request.json();
 
     if (!name || !email || originalAmount == null || fee == null || total == null ||
         isNaN(originalAmount) || isNaN(fee) || isNaN(total) ||
@@ -113,68 +133,74 @@ Please complete your payment via ${displayMethod.toLowerCase()} to settle this i
 If you have any questions, please contact us at info@vercatryx.com or (347) 215-0400.
     `;
 
-    // Generate PDF
-    const doc = new PDFDocument({ margin: 50 });
+    // Generate PDF using pdfmake
+    const docDefinition = {
+      content: [
+        { text: 'Vercatryx', style: 'header', alignment: 'center' },
+        { text: 'info@vercatryx.com | (347) 215-0400', style: 'subheader', alignment: 'center' },
+        { text: 'INVOICE', style: 'title', alignment: 'center', margin: [0, 20, 0, 20] },
+        {
+          columns: [
+            {
+              stack: [
+                { text: 'Bill To:', bold: true },
+                { text: name },
+                { text: email }
+              ]
+            },
+            {
+              stack: [
+                { text: 'Invoice Details:', bold: true, alignment: 'right' },
+                { text: `Invoice #: ${invoiceNumber}`, alignment: 'right' },
+                { text: `Date: ${invoiceDate}`, alignment: 'right' },
+                { text: `Payment Method: ${displayMethod}`, alignment: 'right' },
+                !isDummy && { text: `Payment ID: ${paymentIntentId}`, alignment: 'right' }
+              ],
+              alignment: 'right'
+            }
+          ],
+          margin: [0, 20, 0, 20]
+        },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', 'auto'],
+            body: [
+              [{ text: 'Payment Breakdown', colSpan: 2, bold: true }, {}],
+              ['Service Amount', `$${originalAmount.toFixed(2)}`],
+              ...(effectiveFee > 0 ? [['Processing Fee (3%)', `$${effectiveFee.toFixed(2)}`]] : []),
+              [{ text: 'Total Due', bold: true }, { text: `$${effectiveTotal.toFixed(2)}`, bold: true, alignment: 'right' }]
+            ]
+          },
+          layout: 'lightHorizontalLines'
+        },
+        {
+          text: [
+            `Please complete your payment via ${displayMethod.toLowerCase()} to settle this invoice.`,
+            '\nIf you have any questions, please contact us at info@vercatryx.com or (347) 215-0400.'
+          ],
+          style: 'footer',
+          alignment: 'center',
+          margin: [0, 40, 0, 0]
+        }
+      ],
+      styles: {
+        header: { fontSize: 24, bold: true, color: '#e44848', margin: [0, 0, 0, 10] },
+        subheader: { fontSize: 10, color: '#666' },
+        title: { fontSize: 18, bold: true },
+        footer: { fontSize: 10, color: '#666', italics: true }
+      },
+      defaultStyle: { fontSize: 12 }
+    };
+
+    const pdfMake = initializePdfMake();
+    const pdfDoc = pdfMake.createPdf(docDefinition);
     const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      // Header
-      doc.fontSize(20).text('Vercatryx', 50, 50);
-      doc.fontSize(12).text('info@vercatryx.com', 50, 80);
-      doc.fontSize(12).text('(347) 215-0400', 50, 95);
-
-      // Logo (text placeholder, as PDFKit doesn't embed SVG easily; use image if path available)
-      doc.fontSize(16).text('INVOICE', 400, 50, { align: 'right' });
-
-      // Bill To
-      doc.fontSize(14).text('Bill To:', 50, 150);
-      doc.fontSize(12).text(name, 50, 170);
-      doc.fontSize(12).text(email, 50, 185);
-
-      // Invoice Details
-      doc.fontSize(14).text('Invoice Details:', 400, 150, { align: 'right' });
-      doc.fontSize(12).text(`Invoice #: ${invoiceNumber}`, 400, 170, { align: 'right' });
-      doc.fontSize(12).text(`Date: ${invoiceDate}`, 400, 185, { align: 'right' });
-      doc.fontSize(12).text(`Payment Method: ${displayMethod}`, 400, 200, { align: 'right' });
-      if (!isDummy) {
-        doc.fontSize(12).text(`Payment ID: ${paymentIntentId}`, 400, 215, { align: 'right' });
-      }
-
-      // Breakdown
-      let yPos = 250;
-      doc.fontSize(14).text('Payment Breakdown', 50, yPos);
-      yPos += 30;
-
-      // Table headers
-      doc.strokeColor('#999').lineWidth(1)
-        .moveTo(50, yPos).lineTo(550, yPos).stroke(); // Top line
-      doc.fontSize(12).text('Service Amount', 60, yPos + 5);
-      doc.text(`$${originalAmount.toFixed(2)}`, 450, yPos + 5, { align: 'right' });
-      yPos += 20;
-
-      if (effectiveFee > 0) {
-        doc.text('Processing Fee (3%)', 60, yPos + 5);
-        doc.text(`$${effectiveFee.toFixed(2)}`, 450, yPos + 5, { align: 'right' });
-        yPos += 20;
-      }
-
-      // Total line
-      doc.strokeColor('#999').lineWidth(1)
-        .moveTo(50, yPos).lineTo(550, yPos).stroke(); // Bottom line
-      doc.fontSize(14).fillColor('#000').text('Total Due', 60, yPos + 5);
-      doc.text(`$${effectiveTotal.toFixed(2)}`, 450, yPos + 5, { align: 'right' });
-      yPos += 30;
-
-      // Footer
-      doc.fillColor('#666').fontSize(10)
-        .text(`Please complete your payment via ${displayMethod.toLowerCase()} to settle this invoice.`, 50, yPos);
-      yPos += 20;
-      doc.text('If you have any questions, please contact us at info@vercatryx.com or (347) 215-0400.', 50, yPos);
-
-      doc.end();
+      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+      pdfDoc.on('error', reject);
+      pdfDoc.end();
     });
 
     // Create transporter using Zoho SMTP
@@ -202,6 +228,16 @@ If you have any questions, please contact us at info@vercatryx.com or (347) 215-
         },
       ],
     });
+
+    // If public_token provided, update status to 'invoiced'
+    if (public_token) {
+      try {
+        await updatePaymentRequestStatus(public_token, 'invoiced');
+      } catch (updateError) {
+        console.error('Failed to update payment request status:', updateError);
+        // Don't fail the whole operation, just log
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

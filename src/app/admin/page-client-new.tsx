@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy, Mail } from "lucide-react";
+import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy, Mail, DollarSign } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 import { toast } from "sonner";
 import CompaniesManagement from "@/components/admin/companies-management";
@@ -9,6 +9,7 @@ import UsersManagementNew from "@/components/admin/users-management-new";
 import ProjectsManagementNew from "@/components/admin/projects-management-new";
 import EmailSender from "@/components/admin/email-sender";
 import EmailHistory from "@/components/admin/email-history";
+import PaymentsManagementNew from "@/components/admin/payments-management";
 import type { Company, User } from "@/types/company";
 
 // Email tab component to manage shared state
@@ -51,7 +52,7 @@ interface AdminClientNewProps {
   isSuperAdmin: boolean;
 }
 
-type TabType = "companies" | "users" | "projects" | "signatures" | "email";
+type TabType = "companies" | "users" | "projects" | "signatures" | "email" | "payments";
 
 interface SignatureRequest {
   id: string;
@@ -255,6 +256,17 @@ export default function AdminClientNew({
           >
             <Mail className="w-5 h-5" />
             Email
+          </button>
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+              activeTab === "payments"
+                ? "border-blue-600 text-blue-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <DollarSign className="w-5 h-5" />
+            Payments
           </button>
         </div>
       </div>
@@ -535,6 +547,15 @@ export default function AdminClientNew({
 
         {activeTab === "email" && (
           <EmailTabContent />
+        )}
+
+        {activeTab === "payments" && (
+          <PaymentsManagementNew
+            companies={companies}
+            isSuperAdmin={isSuperAdmin}
+            currentUser={currentUser}
+            onDataChange={handleDataChange}
+          />
         )}
       </div>
     </div>
