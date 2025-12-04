@@ -26,17 +26,7 @@ export const metadata: Metadata = {
     title: "Vercatryx | Modern Business Solutions & CRM Platform",
     description: "Transform your business with Vercatryx's comprehensive CRM platform. Streamline operations, manage clients, and grow your business with our powerful tools.",
   },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
+  robots: "index, follow",
   alternates: {
     canonical: process.env.NEXT_PUBLIC_SITE_URL || 'https://vercatryx.com',
   },

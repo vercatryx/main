@@ -1,0 +1,165 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useStripe } from '@stripe/react-stripe-js';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+
+interface PaymentIntent {
+  id: string;
+  amount: number;
+  metadata: {
+    originalAmount: string;
+    fee: string;
+  };
+}
+
+export default function SuccessPage() {
+  const stripe = useStripe();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(true);
+  const [error, setError] = useState('');
+
+  const clientSecret = searchParams.get('client_secret');
+
+  useEffect(() => {
+    if (clientSecret && stripe) {
+      stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+        if (paymentIntent && paymentIntent.status === 'succeeded') {
+          setPaymentIntent(paymentIntent as PaymentIntent);
+        } else {
+          setError('Payment not confirmed as successful.');
+          router.push('/payments');
+        }
+      }).catch((err) => {
+        console.error('Error retrieving payment intent:', err);
+        setError('Failed to verify payment.');
+        router.push('/payments');
+      });
+    } else {
+      setError('No payment information found.');
+      router.push('/payments');
+    }
+  }, [clientSecret, stripe, router]);
+
+  if (!paymentIntent) {
+    return (
+      <div className="container mx-auto py-8">
+        <Card className="max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <CardTitle>Verifying Payment...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-center">Please wait while we confirm your payment.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const originalAmount = parseFloat(paymentIntent.metadata.originalAmount);
+  const fee = parseFloat(paymentIntent.metadata.fee);
+  const total = paymentIntent.amount / 100;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email) {
+      setError('Please provide your name and email.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/payments/send-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          originalAmount,
+          fee,
+          total,
+          paymentIntentId: paymentIntent.id,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Invoice sent to your email!');
+        setShowForm(false);
+      } else {
+        const { error } = await response.json();
+        setError(error || 'Failed to send invoice.');
+      }
+    } catch (err) {
+      setError('An error occurred while sending the invoice.');
+    }
+
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="container mx-auto py-8 max-w-md">
+      <Card>
+        <CardHeader className="text-center">
+          <img src="/logo-big.svg" alt="Vercatryx Logo" className="mx-auto h-12 w-auto mb-4" />
+          <CardTitle>Payment Successful!</CardTitle>
+          <CardDescription>
+            Thank you for your payment. Total charged: ${total.toFixed(2)}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {showForm ? (
+            <>
+              <p>To send you an invoice, please provide your details:</p>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your full name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={isSubmitting} className="w-full">
+                  {isSubmitting ? 'Sending...' : 'Send Invoice'}
+                </Button>
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+              </form>
+            </>
+          ) : (
+            <div className="text-center">
+              <p className="text-green-600">Invoice sent successfully!</p>
+              <Button onClick={() => router.push('/')} className="mt-4">
+                Back to Home
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
