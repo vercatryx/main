@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getPaymentRequestByToken, getRequestDisplayInfo } from '@/lib/payments';
+import { getPaymentRequestByToken, getRequestDisplayInfo, updatePaymentRequestStripeInfo } from '@/lib/payments';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,14 +17,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Get payment request
-    const paymentRequest = await getPaymentRequestByToken(public_token);
+    let paymentRequest;
+    try {
+      paymentRequest = await getPaymentRequestByToken(public_token);
+    } catch (err) {
+      console.error('Error fetching payment request:', err);
+      return NextResponse.json({ error: 'Failed to fetch payment request' }, { status: 500 });
+    }
+
     if (!paymentRequest) {
       return NextResponse.json({ error: 'Payment request not found' }, { status: 404 });
     }
 
     // Only allow setup intents for interval_billing
     if (paymentRequest.payment_type !== 'interval_billing') {
-      return NextResponse.json({ error: 'Setup intents are only for interval billing' }, { status: 400 });
+      return NextResponse.json({ 
+        error: `Setup intents are only for interval billing. This payment type is: ${paymentRequest.payment_type || 'unknown'}` 
+      }, { status: 400 });
     }
 
     let customerEmail = email;
@@ -39,6 +52,14 @@ export async function POST(request: NextRequest) {
     if (!customerId) {
       const customer = await stripe.customers.create({ email: customerEmail });
       customerId = customer.id;
+      // Save customer ID to payment request immediately
+      try {
+        await updatePaymentRequestStripeInfo(paymentRequest.id, customerId, undefined);
+        console.log('Customer ID saved to payment request:', customerId);
+      } catch (err) {
+        console.error('Failed to save customer ID:', err);
+        // Continue anyway - will be saved when payment method is saved
+      }
     }
 
     // Create setup intent (no charge, just collects payment method)
@@ -52,10 +73,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('Setup intent created:', { setupIntentId: setupIntent.id, customerId });
+
     return NextResponse.json({ clientSecret: setupIntent.client_secret });
   } catch (error) {
     console.error('Error creating setup intent:', error);
-    return NextResponse.json({ error: 'Failed to create setup intent' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ 
+      error: `Failed to create setup intent: ${errorMessage}` 
+    }, { status: 500 });
   }
 }
 

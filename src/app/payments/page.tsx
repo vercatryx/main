@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { useSearchParams } from 'next/navigation';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { getRequestDisplayInfo } from '@/lib/payments';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -24,19 +25,82 @@ function CheckoutForm({ total, clientSecret, public_token, paymentRequest, isSet
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isPaymentElementReady, setIsPaymentElementReady] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Check when PaymentElement is ready using MutationObserver
+  useEffect(() => {
+    if (!stripe || !elements || isPaymentElementReady) return;
+
+    // Use MutationObserver to detect when PaymentElement renders
+    const checkPaymentElement = () => {
+      if (formRef.current) {
+        // Check if Stripe's payment element has rendered
+        const stripeElement = formRef.current.querySelector('[data-testid="payment-element"]') ||
+                             formRef.current.querySelector('.InputElement') ||
+                             formRef.current.querySelector('input[data-elements-stable-field-name]') ||
+                             formRef.current.querySelector('iframe[src*="js.stripe.com"]') ||
+                             formRef.current.querySelector('[class*="StripeElement"]') ||
+                             formRef.current.querySelector('[id*="card"]');
+        
+        if (stripeElement) {
+          // Add a small delay to ensure it's fully rendered
+          setTimeout(() => {
+            setIsPaymentElementReady(true);
+          }, 500);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Start checking immediately, no delay
+    // Check immediately first
+    if (checkPaymentElement()) return;
+
+    // Use MutationObserver to watch for changes
+    const observer = new MutationObserver(() => {
+      if (checkPaymentElement()) {
+        observer.disconnect();
+      }
+    });
+
+    // Wait a tiny bit for the form ref to be set
+    const initTimeout = setTimeout(() => {
+      if (formRef.current) {
+        observer.observe(formRef.current, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+        });
+      }
+    }, 50);
+
+    // Fallback: show form after 3 seconds even if not detected
+    const timeout = setTimeout(() => {
+      setIsPaymentElementReady(true);
+      observer.disconnect();
+    }, 3000);
+
+    return () => {
+      clearTimeout(initTimeout);
+      clearTimeout(timeout);
+      observer.disconnect();
+    };
+  }, [stripe, elements, isPaymentElementReady]);
 
   if (!stripe || !elements) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
-            <p className="text-sm text-muted-foreground">Loading secure payment form...</p>
+            <AnimatedLogo
+              width="200px"
+              height="200px"
+              speed={5}
+            />
+            <p className="mt-6 text-sm text-muted-foreground">Loading secure payment form...</p>
           </div>
-        </div>
-        <div className="space-y-2">
-          <div className="h-12 bg-muted rounded-md animate-pulse"></div>
-          <div className="h-10 bg-muted rounded-md animate-pulse w-3/4"></div>
         </div>
       </div>
     );
@@ -90,13 +154,29 @@ function CheckoutForm({ total, clientSecret, public_token, paymentRequest, isSet
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
-      <Button type="submit" disabled={!stripe || isLoading}>
-        {isLoading ? 'Processing...' : isSetupIntent ? 'Save Payment Method' : `Pay $${total.toFixed(2)}`}
-      </Button>
-      {error && <p className="text-red-500 text-sm">{error}</p>}
-    </form>
+    <div className="relative min-h-[400px]">
+      <div 
+        className={`absolute inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center rounded-md min-h-[400px] w-full transition-opacity duration-200 ${
+          !isPaymentElementReady ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="text-center">
+          <AnimatedLogo
+            width="200px"
+            height="200px"
+            speed={5}
+          />
+          <p className="mt-6 text-sm text-muted-foreground">Loading secure payment form...</p>
+        </div>
+      </div>
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+        <PaymentElement />
+        <Button type="submit" disabled={!stripe || isLoading || !isPaymentElementReady}>
+          {isLoading ? 'Processing...' : isSetupIntent ? 'Save Payment Method' : `Pay $${total.toFixed(2)}`}
+        </Button>
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+      </form>
+    </div>
   );
 }
 
@@ -122,6 +202,7 @@ function PaymentsPageContent() {
   const [paymentRequest, setPaymentRequest] = useState<any>(null);
   const [loadingRequest, setLoadingRequest] = useState(!!public_token);
   const [payerEmail, setPayerEmail] = useState('');
+  const [showUpdatePaymentMethodDialog, setShowUpdatePaymentMethodDialog] = useState(false);
 
   // If public_token, fetch request
   useEffect(() => {
@@ -157,6 +238,12 @@ function PaymentsPageContent() {
             setInvoiceName(name);
             setInvoiceEmail(email);
             setPayerEmail(email);
+            
+            // Check if payment method is already saved - ask if they want to update it
+            const isRecurring = request.payment_type === 'interval_billing' || request.payment_type === 'monthly';
+            if (isRecurring && request.stripe_payment_method_id) {
+              setShowUpdatePaymentMethodDialog(true);
+            }
           } else {
             setError('Invalid payment request token.');
           }
@@ -211,7 +298,8 @@ function PaymentsPageContent() {
           body: JSON.stringify(body),
         });
         if (!response.ok) {
-          throw new Error('Failed to create setup intent');
+          const errorData = await response.json().catch(() => ({ error: 'Failed to create setup intent' }));
+          throw new Error(errorData.error || 'Failed to create setup intent');
         }
         const { clientSecret: secret } = await response.json();
         if (secret) {
@@ -258,7 +346,8 @@ function PaymentsPageContent() {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error('Failed to create payment intent');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to create payment intent' }));
+        throw new Error(errorData.error || 'Failed to create payment intent');
       }
       const { clientSecret: secret } = await response.json();
       if (secret) {
@@ -283,7 +372,20 @@ function PaymentsPageContent() {
   }
 
   if (loadingRequest) {
-    return <div className="container mx-auto py-8">Loading payment request...</div>;
+    return (
+      <div className="container mx-auto py-8 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <AnimatedLogo
+            width="300px"
+            height="300px"
+            speed={5}
+          />
+          <p className="mt-6 text-muted-foreground text-lg">
+            Loading payment request...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const handleMethodSelect = (method: string) => {
@@ -693,6 +795,43 @@ function PaymentsPageContent() {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  // Show update payment method dialog if payment method already exists
+  if (showUpdatePaymentMethodDialog && paymentRequest) {
+    return (
+      <Dialog open={showUpdatePaymentMethodDialog} onOpenChange={setShowUpdatePaymentMethodDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Payment Method?</DialogTitle>
+            <DialogDescription>
+              You already have a payment method saved for this {paymentRequest.payment_type === 'interval_billing' ? 'interval billing' : 'monthly'} payment. 
+              Would you like to update it with a new payment method?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-4 justify-end pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowUpdatePaymentMethodDialog(false);
+                // Show message that they already have a payment method
+                toast.info('Your existing payment method will be used for future billing.');
+              }}
+            >
+              Keep Existing
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowUpdatePaymentMethodDialog(false);
+                // Proceed to payment method selection to update
+              }}
+            >
+              Update Payment Method
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 

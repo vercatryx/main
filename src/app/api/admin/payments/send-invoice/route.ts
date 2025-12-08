@@ -3,6 +3,8 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { getCurrentUser } from '@/lib/permissions';
 import { getPaymentRequestById, updatePaymentRequestStatus, getRequestDisplayInfo } from '@/lib/payments';
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
 
 function initializePdfMake() {
   try {
@@ -76,12 +78,18 @@ export async function POST(request: NextRequest) {
           .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; }
           .header { text-align: center; padding: 20px 0; border-bottom: 2px solid #e44848; }
           .header img { width: 150px; margin-bottom: 10px; }
-          .company-info { margin: 20px 0; }
           .breakdown { margin: 20px 0; }
           .breakdown table { width: 100%; border-collapse: collapse; }
           .breakdown th, .breakdown td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
           .breakdown th { background: #f9f9f9; }
           .total { font-weight: bold; font-size: 1.1em; }
+          .pay-button { display: inline-block; padding: 20px 40px; background: #e44848; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-size: 20px; font-weight: bold; margin: 30px 0; text-align: center; }
+          a.pay-button { color: #ffffff !important; }
+          a.pay-button:link { color: #ffffff !important; }
+          a.pay-button:visited { color: #ffffff !important; }
+          a.pay-button:hover { color: #ffffff !important; background: #c93a3a; }
+          a.pay-button:active { color: #ffffff !important; }
+          .button-container { text-align: center; margin: 30px 0; }
           .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.9em; }
         </style>
       </head>
@@ -90,12 +98,6 @@ export async function POST(request: NextRequest) {
           <div class="header">
             <img src="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/logo-big.svg" alt="Vercatryx Logo" />
             <h1>Invoice</h1>
-          </div>
-
-          <div class="company-info">
-            <h2>Vercatryx</h2>
-            <p>Email: info@vercatryx.com</p>
-            <p>Phone: (347) 215-0400</p>
           </div>
 
           <div style="display: flex; justify-content: space-between; margin: 20px 0;">
@@ -107,12 +109,11 @@ export async function POST(request: NextRequest) {
             <div style="text-align: right;">
               <p><strong>Invoice #:</strong> ${invoiceNumber}</p>
               <p><strong>Date:</strong> ${invoiceDate}</p>
-              <p><strong>Status:</strong> ${paymentRequest.status}</p>
             </div>
           </div>
 
           <div class="breakdown">
-            <h3>Payment Breakdown</h3>
+            <h3>Payment Details</h3>
             <table>
               <tr>
                 <th>Service Amount</th>
@@ -125,10 +126,12 @@ export async function POST(request: NextRequest) {
             </table>
           </div>
 
+          <div class="button-container">
+            <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/payments?public_token=${paymentRequest.public_token}" class="pay-button">Pay Now - $${amount.toFixed(2)}</a>
+          </div>
+
           <div class="footer">
-            <p>Please complete your payment to settle this invoice.</p>
             <p>If you have any questions, please contact us at info@vercatryx.com or (347) 215-0400.</p>
-            <p style="margin-top: 20px;"><strong>Payment Link:</strong> <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/payments?public_token=${paymentRequest.public_token}">Click here to pay</a></p>
           </div>
         </div>
       </body>
@@ -143,23 +146,55 @@ Email: ${recipientEmail}
 
 Invoice #: ${invoiceNumber}
 Date: ${invoiceDate}
-Status: ${paymentRequest.status}
 
-Payment Breakdown:
+Payment Details:
 Service Amount: $${amount.toFixed(2)}
 Total Due: $${amount.toFixed(2)}
 
-Please complete your payment to settle this invoice.
+PAY NOW: ${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/payments?public_token=${paymentRequest.public_token}
 
 If you have any questions, please contact us at info@vercatryx.com or (347) 215-0400.
-
-Payment Link: ${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/payments?public_token=${paymentRequest.public_token}
     `;
 
+    // Load logo image and convert to base64 for pdfmake
+    let logoImage: string | undefined;
+    try {
+      const logoPath = path.join(process.cwd(), 'public', 'logo-big.png');
+      if (fs.existsSync(logoPath)) {
+        const logoBuffer = fs.readFileSync(logoPath);
+        logoImage = logoBuffer.toString('base64');
+        console.log('[SEND INVOICE] Logo loaded successfully, size:', logoBuffer.length, 'bytes');
+      } else {
+        console.warn('[SEND INVOICE] Logo file not found at:', logoPath);
+      }
+    } catch (err) {
+      console.error('[SEND INVOICE] Error loading logo:', err);
+    }
+
+    const pdfMake = initializePdfMake();
+    
+    // Add logo to vfs if available
+    if (logoImage) {
+      pdfMake.vfs = pdfMake.vfs || {};
+      pdfMake.vfs['logo.png'] = logoImage;
+      console.log('[SEND INVOICE] Logo added to pdfmake vfs');
+    }
+
     // Generate PDF using pdfmake
-    const docDefinition = {
+    const docDefinition: any = {
       content: [
-        { text: 'Vercatryx', style: 'header', alignment: 'center' },
+        // Header with Logo
+        ...(logoImage ? [{
+          image: 'logo.png', // Reference from vfs
+          width: 150,
+          alignment: 'center',
+          margin: [0, 0, 0, 10],
+          fit: [150, 75] // Maintain aspect ratio
+        }] : [{
+          text: 'Vercatryx',
+          style: 'header',
+          alignment: 'center'
+        }]),
         { text: 'info@vercatryx.com | (347) 215-0400', style: 'subheader', alignment: 'center' },
         { text: 'INVOICE', style: 'title', alignment: 'center', margin: [0, 20, 0, 20] },
         {
@@ -222,7 +257,6 @@ Payment Link: ${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/pay
       defaultStyle: { fontSize: 12 }
     };
 
-    const pdfMake = initializePdfMake();
     const pdfDoc = pdfMake.createPdf(docDefinition);
     const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
       pdfDoc.getBuffer((buffer: Buffer) => {

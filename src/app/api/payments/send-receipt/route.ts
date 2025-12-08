@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
       total, 
       paymentMethod,
       recipientEmail,
-      recipientName 
+      recipientName,
+      invoiceNumber
     } = body;
 
     if (!recipientEmail) {
@@ -39,7 +40,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const receiptNumber = paymentIntentId ? `REC-${paymentIntentId.slice(-12).toUpperCase()}` : `REC-${Date.now().toString().slice(-10)}`;
+    // Use invoice number if provided, otherwise generate a receipt number
+    const invoiceNum = invoiceNumber || (paymentIntentId ? `REC-${paymentIntentId.slice(-12).toUpperCase()}` : `REC-${Date.now().toString().slice(-10)}`);
     const receiptDate = new Date().toLocaleDateString('en-US', { 
       year: 'numeric', 
       month: 'long', 
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
               <p>${displayEmail}</p>
             </div>
             <div style="text-align: right;">
-              <p><strong>Receipt #:</strong> ${receiptNumber}</p>
+              <p><strong>Invoice #:</strong> ${invoiceNum}</p>
               <p><strong>Date:</strong> ${receiptDate}</p>
               <p><strong>Payment Method:</strong> ${methodDisplay}</p>
             </div>
@@ -135,7 +137,7 @@ Vercatryx Payment Receipt
 Bill To: ${displayName}
 Email: ${displayEmail}
 
-Receipt #: ${receiptNumber}
+Invoice #: ${invoiceNum}
 Date: ${receiptDate}
 Payment Method: ${methodDisplay}
 
@@ -164,12 +166,12 @@ If you have any questions, please contact us at info@vercatryx.com or (347) 215-
     await transporter.sendMail({
       from: '"Vercatryx" <info@vercatryx.com>',
       to: displayEmail,
-      subject: `Payment Receipt - ${receiptNumber}`,
+      subject: `Payment Receipt - Invoice #${invoiceNum}`,
       html: htmlBody,
       text: textBody,
     });
 
-    return NextResponse.json({ success: true, receiptNumber });
+    return NextResponse.json({ success: true, invoiceNumber: invoiceNum });
   } catch (error) {
     console.error('Error sending receipt:', error);
     return NextResponse.json(

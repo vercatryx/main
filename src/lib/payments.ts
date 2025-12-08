@@ -18,6 +18,7 @@ export interface PaymentRequest {
   next_billing_date?: string | null;
   stripe_customer_id?: string | null;
   stripe_payment_method_id?: string | null;
+  invoice_number?: number | null;
   users?: Pick<User, 'email' | 'first_name' | 'last_name'> | null;
 }
 
@@ -168,21 +169,46 @@ export async function getPaymentRequestsByUser(userId: string): Promise<PaymentR
   return data as PaymentRequest[];
 }
 
-export async function updatePaymentRequestStatus(token: string, status: 'invoiced' | 'completed' | 'cancelled'): Promise<void> {
+export async function updatePaymentRequestStatus(token: string, status: 'invoiced' | 'completed' | 'cancelled'): Promise<number | null> {
   const supabase = getServerSupabaseClient();
+
+  // For completed payments, generate invoice number if not already set
+  let invoiceNumber: number | null = null;
+  if (status === 'completed') {
+    // Check if invoice number already exists
+    const { data: existingRequest } = await supabase
+      .from('payments_requests')
+      .select('invoice_number')
+      .eq('public_token', token)
+      .single();
+
+    if (!existingRequest?.invoice_number) {
+      invoiceNumber = await getNextInvoiceNumber();
+    } else {
+      invoiceNumber = existingRequest.invoice_number;
+    }
+  }
+
+  const updateData: any = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (invoiceNumber !== null) {
+    updateData.invoice_number = invoiceNumber;
+  }
 
   const { error } = await supabase
     .from('payments_requests')
-    .update({ 
-      status, 
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('public_token', token);
 
   if (error) {
     console.error('Error updating payment request status:', error);
     throw new Error('Failed to update payment request status');
   }
+
+  return invoiceNumber;
 }
 
 export async function getAllPaymentRequests(): Promise<PaymentRequest[]> {
@@ -287,15 +313,21 @@ export async function updatePaymentRequestStripeInfo(
     updateData.stripe_payment_method_id = stripePaymentMethodId;
   }
 
-  const { error } = await supabase
+  console.log('Updating payment request Stripe info:', { id, updateData });
+
+  const { data, error } = await supabase
     .from('payments_requests')
     .update(updateData)
-    .eq('id', id);
+    .eq('id', id)
+    .select();
 
   if (error) {
     console.error('Error updating payment request Stripe info:', error);
-    throw new Error('Failed to update payment request Stripe info');
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to update payment request Stripe info: ${error.message}`);
   }
+
+  console.log('Payment request updated successfully:', data);
 }
 
 export async function updatePaymentRequestNextBillingDate(
@@ -315,6 +347,53 @@ export async function updatePaymentRequestNextBillingDate(
   if (error) {
     console.error('Error updating payment request next billing date:', error);
     throw new Error('Failed to update payment request next billing date');
+  }
+}
+
+export async function getNextInvoiceNumber(): Promise<number> {
+  const supabase = getServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc('get_next_invoice_number');
+
+  if (error) {
+    console.error('Error getting next invoice number:', error);
+    // Fallback: get max invoice number + 1, or start at 1654
+    const { data: maxData } = await supabase
+      .from('payments_requests')
+      .select('invoice_number')
+      .not('invoice_number', 'is', null)
+      .order('invoice_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (maxData && maxData.invoice_number) {
+      return maxData.invoice_number + 1;
+    }
+    return 1654;
+  }
+
+  return data || 1654;
+}
+
+export async function updatePaymentRequestInvoiceAndStatus(
+  id: string,
+  invoiceNumber: number,
+  status: 'completed' | 'invoiced' | 'pending' | 'cancelled'
+): Promise<void> {
+  const supabase = getServerSupabaseClient();
+
+  const { error } = await supabase
+    .from('payments_requests')
+    .update({
+      invoice_number: invoiceNumber,
+      status: status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating payment request invoice and status:', error);
+    throw new Error('Failed to update payment request invoice and status');
   }
 }
 

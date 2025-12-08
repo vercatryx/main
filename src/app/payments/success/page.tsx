@@ -39,6 +39,7 @@ function SuccessPageContent() {
   const [stripe, setStripe] = useState<Stripe | null>(null);
 
   const clientSecret = searchParams.get('client_secret');
+  const publicTokenParam = searchParams.get('public_token');
   const isSetupIntentParam = searchParams.get('setup_intent') === 'true';
   // Detect SetupIntent by client secret prefix (seti_xxx) vs PaymentIntent (pi_xxx)
   const isSetupIntent = isSetupIntentParam || (clientSecret?.startsWith('seti_') ?? false);
@@ -58,13 +59,15 @@ function SuccessPageContent() {
         stripe.retrieveSetupIntent(clientSecret).then(({ setupIntent }) => {
           if (setupIntent) {
             const metadata = (setupIntent as any).metadata || {};
-            const publicToken = metadata.public_token;
+            // Try to get public_token from metadata, URL param, or setup intent metadata
+            const publicToken = metadata.public_token || publicTokenParam;
             
             if (setupIntent.status === 'succeeded') {
               toast.success('Payment method saved successfully!');
               
               // Save payment method for interval_billing
               if (publicToken && setupIntent.payment_method) {
+                console.log('Saving payment method with:', { publicToken, setup_intent_id: setupIntent.id, payment_method: setupIntent.payment_method });
                 fetch('/api/payments/save-payment-method', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -72,15 +75,28 @@ function SuccessPageContent() {
                     public_token: publicToken,
                     setup_intent_id: setupIntent.id,
                   }),
-                }).then(() => {
-                  setStatusUpdated(true);
-                  // Mark as completed since setup is done
-                  updatePaymentRequestStatus(publicToken, 'completed').catch((err) => {
-                    console.error('Failed to update payment status:', err);
-                  });
+                }).then(async (response) => {
+                  if (!response.ok) {
+                    const error = await response.json();
+                    console.error('Failed to save payment method:', error);
+                    toast.error('Failed to save payment method. Please contact support.');
+                  } else {
+                    setStatusUpdated(true);
+                    console.log('Payment method saved successfully');
+                    // Status will be updated to 'invoiced' by the save-payment-method API
+                  }
                 }).catch((err) => {
                   console.error('Failed to save payment method:', err);
+                  toast.error('Failed to save payment method. Please contact support.');
                 });
+              } else {
+                console.error('Missing publicToken or payment_method:', { 
+                  publicToken, 
+                  publicTokenParam,
+                  metadata,
+                  payment_method: setupIntent.payment_method 
+                });
+                toast.error('Missing payment information. Please contact support.');
               }
               
               // Set a dummy payment intent for display
@@ -137,7 +153,7 @@ function SuccessPageContent() {
               // If public_token in metadata, update status and save payment method for recurring payments
               if (pi.metadata.public_token) {
                 updatePaymentRequestStatus(pi.metadata.public_token, 'completed')
-                  .then(() => {
+                  .then((invoiceNumber) => {
                     setStatusUpdated(true);
                     toast.success('Payment recorded successfully!');
                     
@@ -157,6 +173,7 @@ function SuccessPageContent() {
                         total: total,
                         paymentMethod: pi.metadata.method || 'card',
                         recipientEmail: pi.metadata.payer_email || '',
+                        invoiceNumber: invoiceNumber,
                       }),
                     }).catch((err) => {
                       console.error('Failed to send receipt:', err);

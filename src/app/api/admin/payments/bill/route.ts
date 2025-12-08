@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getCurrentUser } from '@/lib/permissions';
-import { getPaymentRequestById, getRequestDisplayInfo } from '@/lib/payments';
+import { getPaymentRequestById, getRequestDisplayInfo, getNextInvoiceNumber, updatePaymentRequestInvoiceAndStatus } from '@/lib/payments';
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -56,12 +56,14 @@ export async function POST(request: NextRequest) {
     }
 
     const isCard = paymentMethod.type === 'card';
+    const isACH = paymentMethod.type === 'us_bank_account';
     const fee = isCard ? amount * 0.03 : 0;
     const totalAmount = amount + fee;
     const totalCents = Math.round(totalAmount * 100);
 
     // Create payment intent with saved payment method
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Must specify payment_method_types for ACH payments
+    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
       amount: totalCents,
       currency: 'usd',
       customer: paymentRequest.stripe_customer_id,
@@ -75,10 +77,38 @@ export async function POST(request: NextRequest) {
         method: isCard ? 'card' : 'ach',
         billed_by: userId,
         billing_type: paymentRequest.payment_type,
+        // Store invoice number in metadata before creating payment intent
+        // We'll update this after getting the invoice number
       },
-    });
+    };
+
+    // For ACH payments, must specify payment_method_types
+    if (isACH) {
+      paymentIntentParams.payment_method_types = ['us_bank_account'];
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+      // Get next invoice number and update payment request
+      const invoiceNumber = await getNextInvoiceNumber();
+      
+      // Update the payment intent metadata with the invoice number
+      await stripe.paymentIntents.update(paymentIntent.id, {
+        metadata: {
+          ...paymentIntent.metadata,
+          invoice_number: invoiceNumber.toString(),
+        },
+      });
+      
+      // For interval_billing, keep status as 'invoiced' so it can be billed again
+      // For monthly, mark as 'completed' after first billing
+      // For one_time (shouldn't happen here), mark as 'completed'
+      const newStatus = paymentRequest.payment_type === 'interval_billing' ? 'invoiced' : 'completed';
+      
+      // Update payment request with invoice number and status
+      await updatePaymentRequestInvoiceAndStatus(paymentRequest.id, invoiceNumber, newStatus);
+
       // Send receipt email automatically (in background, don't wait)
       const sendReceipt = async () => {
         try {
@@ -97,6 +127,7 @@ export async function POST(request: NextRequest) {
               paymentMethod: isCard ? 'card' : 'ach',
               recipientEmail: recipientEmail,
               recipientName: recipientName,
+              invoiceNumber: invoiceNumber,
             }),
           });
         } catch (receiptError) {
@@ -110,9 +141,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ 
         success: true, 
-        message: `Payment of $${totalAmount.toFixed(2)} (${amount.toFixed(2)} + ${fee.toFixed(2)} fee) has been ${paymentIntent.status === 'succeeded' ? 'charged' : 'initiated'}. Receipt sent to customer.`,
+        message: `Payment of $${totalAmount.toFixed(2)} (${amount.toFixed(2)} + ${fee.toFixed(2)} fee) has been ${paymentIntent.status === 'succeeded' ? 'charged' : 'initiated'}. Invoice #${invoiceNumber} sent to customer.`,
         paymentIntentId: paymentIntent.id,
         status: paymentIntent.status,
+        invoiceNumber: invoiceNumber,
       });
     } else {
       return NextResponse.json({ 
