@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getCurrentUser } from '@/lib/permissions';
-import { createPaymentRequest, getAllPaymentRequests, getCompanyPaymentRequests } from '@/lib/payments';
+import { createPaymentRequest, getAllPaymentRequests, getCompanyPaymentRequests, deletePaymentRequest } from '@/lib/payments';
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,19 +65,32 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     console.log('POST body:', body); // Debug
-    const { userId: targetUserId, recipientEmail, recipientName, amount } = body;
+    const { userId: targetUserId, recipientEmail, recipientName, amount, paymentType, monthlyAmounts } = body;
 
-    if (!recipientEmail || !recipientName || !amount || typeof amount !== 'number' || amount <= 0) {
-      console.log('Invalid input:', { recipientEmail, recipientName, amount });
-      return NextResponse.json({ error: 'Invalid recipient email, name, or amount' }, { status: 400 });
+    if (!recipientEmail || !recipientName) {
+      console.log('Invalid input:', { recipientEmail, recipientName });
+      return NextResponse.json({ error: 'Invalid recipient email or name' }, { status: 400 });
     }
+
+    // Amount is required only for one_time, optional for monthly and interval_billing
+    const isRecurring = paymentType === 'monthly' || paymentType === 'interval_billing';
+    if (!isRecurring && (!amount || typeof amount !== 'number' || amount <= 0)) {
+      console.log('Invalid amount for one-time payment:', { amount, paymentType });
+      return NextResponse.json({ error: 'Invalid amount (required for one-time payments)' }, { status: 400 });
+    }
+
+    // Use 0 as placeholder for recurring payments if no amount provided
+    const finalAmount = isRecurring ? (amount && typeof amount === 'number' && amount > 0 ? amount : 0) : amount;
 
     const requestData = await createPaymentRequest({
       userId: targetUserId || undefined,
       recipientEmail,
       recipientName,
-      amount,
+      amount: finalAmount,
       createdByClerkUserId: userId,
+      paymentType: paymentType || 'one_time',
+      // Amount is optional for interval_billing (set to 0 as placeholder)
+      // Admin can bill any amount at any time for interval_billing
     });
 
     console.log('Payment request created:', requestData); // Debug
@@ -86,5 +99,37 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating payment request:', error);
     return NextResponse.json({ error: 'Failed to create payment request' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const clerkUser = await currentUser();
+    const isSuperAdmin = clerkUser?.publicMetadata?.role === 'superuser';
+
+    const dbUser = await getCurrentUser();
+
+    if (!isSuperAdmin && !(dbUser && dbUser.role === 'admin')) {
+      return NextResponse.json({ error: 'Only admins can delete payment requests' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { id } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Payment request ID is required' }, { status: 400 });
+    }
+
+    await deletePaymentRequest(id);
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    console.error('Error deleting payment request:', error);
+    return NextResponse.json({ error: 'Failed to delete payment request' }, { status: 500 });
   }
 }

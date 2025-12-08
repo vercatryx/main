@@ -44,21 +44,50 @@ export async function POST(request: NextRequest) {
       metadata.method = 'ach';
     }
 
+    // Check if this is a recurring payment
+    let paymentRequest = null;
+    if (public_token) {
+      try {
+        paymentRequest = await getPaymentRequestByToken(public_token);
+      } catch (err) {
+        console.error('Error fetching payment request:', err);
+      }
+    }
+
+    const isRecurring = paymentRequest && 
+      (paymentRequest.payment_type === 'monthly' || paymentRequest.payment_type === 'interval_billing');
+
     let paymentIntent;
     if (isACH) {
-      const customer = await stripe.customers.create({ email: customerEmail });
+      // For recurring ACH, use existing customer or create new one
+      let customerId = paymentRequest?.stripe_customer_id;
+      if (!customerId) {
+        const customer = await stripe.customers.create({ email: customerEmail });
+        customerId = customer.id;
+      }
+      
       paymentIntent = await stripe.paymentIntents.create({
         amount: totalCents,
         currency: 'usd',
-        customer: customer.id,
+        customer: customerId,
         payment_method_types: ['us_bank_account'],
         metadata,
+        setup_future_usage: isRecurring ? 'off_session' : undefined,
       });
     } else {
+      // For recurring card payments, use existing customer or create new one
+      let customerId = paymentRequest?.stripe_customer_id;
+      if (isRecurring && !customerId && customerEmail) {
+        const customer = await stripe.customers.create({ email: customerEmail });
+        customerId = customer.id;
+      }
+
       paymentIntent = await stripe.paymentIntents.create({
         amount: totalCents,
         currency: 'usd',
+        customer: customerId || undefined,
         metadata,
+        setup_future_usage: isRecurring ? 'off_session' : undefined,
       });
     }
 

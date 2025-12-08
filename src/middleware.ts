@@ -5,7 +5,14 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/contact(.*)",
   "/api/webhooks/clerk(.*)",
+  "/api/contact(.*)",
+  "/api/availability(.*)",
+  "/payments(.*)",
+  "/api/payments/request(.*)",
+  "/api/payments/create-intent(.*)",
+  "/api/payments/send-invoice(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -26,6 +33,6 @@ export const config = {
     // Add other protected paths like /projects, /meetings, etc.
     '/projects(.*)',
     '/meetings(.*)',
-    '/payments(.*)',  // Protect payments if needed, but allow public access via links
+    '/payments(.*)',  // Payments page is public (no authentication required)
   ],
 };

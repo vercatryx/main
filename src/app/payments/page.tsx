@@ -13,7 +13,13 @@ import { getRequestDisplayInfo } from '@/lib/payments';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-function CheckoutForm({ total, clientSecret, public_token }: { total: number; clientSecret: string; public_token?: string }) {
+function CheckoutForm({ total, clientSecret, public_token, paymentRequest, isSetupIntent = false }: { 
+  total: number; 
+  clientSecret: string; 
+  public_token?: string;
+  paymentRequest?: any;
+  isSetupIntent?: boolean;
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -42,16 +48,43 @@ function CheckoutForm({ total, clientSecret, public_token }: { total: number; cl
     setIsLoading(true);
     setError('');
 
-    const { error: confirmError } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/payments/success?client_secret=${clientSecret}${public_token ? `&public_token=${public_token}` : ''}`,
-      },
-    });
+    const returnUrl = `${window.location.origin}/payments/success?client_secret=${clientSecret}${public_token ? `&public_token=${public_token}` : ''}${isSetupIntent ? '&setup_intent=true' : ''}`;
 
-    if (confirmError) {
-      setError(confirmError.message || 'Payment failed');
-    } // Success redirects to return_url
+    if (isSetupIntent) {
+      // For setup intents (interval_billing), just confirm setup without charging
+      const { error: confirmError } = await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          return_url: returnUrl,
+        },
+      });
+
+      if (confirmError) {
+        setError(confirmError.message || 'Setup failed');
+      }
+    } else {
+      // For payment intents, confirm payment
+      const isRecurring = paymentRequest && 
+        (paymentRequest.payment_type === 'monthly' || paymentRequest.payment_type === 'interval_billing');
+      
+      const confirmParams: any = {
+        return_url: returnUrl,
+      };
+
+      if (isRecurring) {
+        // Save payment method for future use
+        confirmParams.setup_future_usage = 'off_session';
+      }
+
+      const { error: confirmError } = await stripe.confirmPayment({
+        elements,
+        confirmParams,
+      });
+
+      if (confirmError) {
+        setError(confirmError.message || 'Payment failed');
+      }
+    }
 
     setIsLoading(false);
   };
@@ -60,7 +93,7 @@ function CheckoutForm({ total, clientSecret, public_token }: { total: number; cl
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
       <Button type="submit" disabled={!stripe || isLoading}>
-        {isLoading ? 'Processing...' : `Pay $${total.toFixed(2)}`}
+        {isLoading ? 'Processing...' : isSetupIntent ? 'Save Payment Method' : `Pay $${total.toFixed(2)}`}
       </Button>
       {error && <p className="text-red-500 text-sm">{error}</p>}
     </form>
@@ -110,14 +143,20 @@ function PaymentsPageContent() {
 
           const { request } = await response.json();
           if (request) {
-            setAmount(request.amount.toString());
+            // For interval_billing, don't set amount (we'll use $1.00 to save payment method)
+            if (request.payment_type !== 'interval_billing') {
+              setAmount(request.amount.toString());
+              setInvoiceAmount(request.amount.toString());
+            } else {
+              // Set a placeholder amount for interval_billing (will use $1.00 for setup)
+              setAmount('1.00');
+            }
             setPaymentRequest(request);
             // Prefill invoice info
             const { name, email } = getRequestDisplayInfo(request);
             setInvoiceName(name);
             setInvoiceEmail(email);
             setPayerEmail(email);
-            setInvoiceAmount(request.amount.toString());
           } else {
             setError('Invalid payment request token.');
           }
@@ -144,13 +183,60 @@ function PaymentsPageContent() {
 
   async function proceedToPayment(numAmount: number, method: string) {
     const isCC = method === 'cc';
+    const isIntervalBilling = paymentRequest?.payment_type === 'interval_billing';
+    
+    setSelectedMethod(method);
+    setError('');
+
+    // For interval_billing, use setup intent (no charge)
+    if (isIntervalBilling) {
+      setShowPreview(true);
+      setFee(0);
+      setTotal(0);
+      try {
+        let body: any = { 
+          method: method === 'ach' ? 'us_bank_account' : 'card',
+          public_token: public_token,
+        };
+        if (method === 'ach') {
+          let emailToSend = public_token ? getRequestDisplayInfo(paymentRequest).email : payerEmail;
+          if (!emailToSend) {
+            throw new Error('Email required for ACH');
+          }
+          body.email = emailToSend;
+        }
+        const response = await fetch('/api/payments/create-setup-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          throw new Error('Failed to create setup intent');
+        }
+        const { clientSecret: secret } = await response.json();
+        if (secret) {
+          setClientSecret(secret);
+          toast.success('Ready to save your payment method');
+        } else {
+          throw new Error('No client secret received');
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'An error occurred';
+        setError(message);
+        toast.error(message);
+        setShowPreview(false);
+      }
+      return;
+    }
+    
+    // For regular payments, use payment intent
     const calculatedFee = isCC ? numAmount * 0.03 : 0;
     const calculatedTotal = numAmount + calculatedFee;
     setFee(calculatedFee);
     setTotal(calculatedTotal);
     setShowPreview(true);
     setError('');
-    setSelectedMethod(method);
+    
     try {
       let body: any = { 
         amount: numAmount, 
@@ -203,6 +289,17 @@ function PaymentsPageContent() {
   const handleMethodSelect = (method: string) => {
     setSelectedMethod(method);
     setError('');
+
+    // For interval_billing, skip amount entry and use minimal amount to save payment method
+    const isIntervalBilling = paymentRequest?.payment_type === 'interval_billing';
+    const isMonthly = paymentRequest?.payment_type === 'monthly';
+    const isRecurring = isIntervalBilling || isMonthly;
+
+    if (isRecurring && (method === 'cc' || method === 'ach')) {
+      // For recurring payments, use $1.00 to save payment method (minimal charge)
+      proceedToPayment(1.00, method);
+      return;
+    }
 
     const presetAmount = public_token ? (paymentRequest?.amount || 0) : parseFloat(searchParams.get('amount') || '0');
     const hasPreset = presetAmount > 0;
@@ -422,36 +519,76 @@ function PaymentsPageContent() {
           <CardHeader className="text-center">
             <img src="/logo-big.svg" alt="Vercatryx Logo" className="mx-auto h-16 w-auto mb-4" />
             <CardTitle>{methodTitle} Payment</CardTitle>
-            <CardDescription>Review your payment details. Total: ${total.toFixed(2)}${feeText}</CardDescription>
+            <CardDescription>
+              {paymentRequest?.payment_type === 'interval_billing' 
+                ? "Setting up your payment method. No charge will be made - we'll just save your payment details for future billing." 
+                : `Review your payment details. Total: ${total.toFixed(2)}${feeText}`}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <h4 className="font-semibold">Payment Breakdown</h4>
-              <div className="border rounded-md p-4 space-y-2">
-                <div className="flex justify-between">
-                  <span>Service Amount:</span>
-                  <span>${numAmount.toFixed(2)}</span>
-                </div>
-                {fee > 0 && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Processing Fee (3%):</span>
-                      <span>${fee.toFixed(2)}</span>
-                    </div>
-                    <hr />
-                  </>
-                )}
-                <div className="flex justify-between font-semibold">
-                  <span>Total Due:</span>
-                  <span>${total.toFixed(2)}</span>
+            {paymentRequest && (paymentRequest.payment_type === 'monthly' || paymentRequest.payment_type === 'interval_billing') && (
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  {paymentRequest.payment_type === 'interval_billing' ? 'Interval Billing Setup' : 'Monthly Recurring Payment Setup'}
+                </h4>
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  {paymentRequest.payment_type === 'interval_billing' ? (
+                    <>
+                      You're setting up your payment method for interval billing. No charge will be made now - we'll just save your payment details. 
+                      After setup, you'll be billed as needed. You only need to enter your payment details once.
+                    </>
+                  ) : (
+                    <>
+                      Your payment method will be saved and you'll be billed as needed. You only need to 
+                      enter your payment details once. Only card and ACH payment methods are available.
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+            {paymentRequest?.payment_type !== 'interval_billing' && (
+              <div className="space-y-2">
+                <h4 className="font-semibold">Payment Breakdown</h4>
+                <div className="border rounded-md p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span>Service Amount:</span>
+                    <span>${numAmount.toFixed(2)}</span>
+                  </div>
+                  {fee > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Processing Fee (3%):</span>
+                        <span>${fee.toFixed(2)}</span>
+                      </div>
+                      <hr />
+                    </>
+                  )}
+                  <div className="flex justify-between font-semibold">
+                    <span>Total Due:</span>
+                    <span>${total.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+            {paymentRequest?.payment_type === 'interval_billing' && (
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-4">
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  <strong>No charge will be made.</strong> We're just saving your payment method securely. 
+                  You'll only be charged when you're billed in the future.
+                </p>
+              </div>
+            )}
 
             {clientSecret && (
               <div className="pt-4">
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm total={total} clientSecret={clientSecret} public_token={public_token} />
+                  <CheckoutForm 
+                    total={total} 
+                    clientSecret={clientSecret} 
+                    public_token={public_token}
+                    paymentRequest={paymentRequest}
+                    isSetupIntent={paymentRequest?.payment_type === 'interval_billing'}
+                  />
                 </Elements>
               </div>
             )}
@@ -572,16 +709,29 @@ function PaymentsPageContent() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center"
-                onClick={() => handleMethodSelect('zelle')}
-              >
-                <span className="mb-1">💰</span>
-                Zelle
-              </Button>
+            <div className={`grid gap-4 ${paymentRequest && (paymentRequest.payment_type === 'monthly' || paymentRequest.payment_type === 'interval_billing') ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
+              {(!paymentRequest || (paymentRequest.payment_type !== 'monthly' && paymentRequest.payment_type !== 'interval_billing')) && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-20 flex flex-col items-center justify-center"
+                    onClick={() => handleMethodSelect('zelle')}
+                  >
+                    <span className="mb-1">💰</span>
+                    Zelle
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-20 flex flex-col items-center justify-center"
+                    onClick={() => handleMethodSelect('wire')}
+                  >
+                    <span className="mb-1">🏦</span>
+                    Wire Transfer
+                  </Button>
+                </>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -595,21 +745,17 @@ function PaymentsPageContent() {
                 type="button"
                 variant="outline"
                 className="h-20 flex flex-col items-center justify-center"
-                onClick={() => handleMethodSelect('wire')}
-              >
-                <span className="mb-1">🏦</span>
-                Wire Transfer
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center"
                 onClick={() => handleMethodSelect('cc')}
               >
                 <span className="mb-1">💳</span>
                 Credit Card
               </Button>
             </div>
+            {paymentRequest && (paymentRequest.payment_type === 'monthly' || paymentRequest.payment_type === 'interval_billing') && (
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                Only card and ACH payment methods are available for recurring payments.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

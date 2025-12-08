@@ -1,5 +1,17 @@
 import { getServerSupabaseClient } from './supabase';
 import { getUserByClerkId } from './users';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from './r2';
+
+export interface MeetingDocument {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: string;
+  uploadedBy: string; // Clerk user ID
+}
 
 export interface Meeting {
   id: string;
@@ -19,6 +31,7 @@ export interface Meeting {
   updatedAt: string;
   startedAt?: string;
   endedAt?: string;
+  documents?: MeetingDocument[]; // Array of attached documents
 }
 
 // Type for database row (snake_case from Supabase)
@@ -40,6 +53,7 @@ type MeetingRow = {
   updated_at: string;
   started_at: string | null;
   ended_at: string | null;
+  documents: any; // JSONB array of MeetingDocument
 };
 
 /**
@@ -64,6 +78,7 @@ function rowToMeeting(row: MeetingRow): Meeting {
     updatedAt: row.updated_at,
     startedAt: row.started_at || undefined,
     endedAt: row.ended_at || undefined,
+    documents: row.documents ? (Array.isArray(row.documents) ? row.documents : []) : undefined,
   };
 }
 
@@ -456,4 +471,147 @@ export async function deleteMeeting(id: string): Promise<boolean> {
  */
 export function generateJitsiRoomName(meetingId: string): string {
   return `vercatryx-${meetingId}`;
+}
+
+/**
+ * Upload a document to a meeting
+ */
+export async function uploadMeetingDocument(
+  meetingId: string,
+  file: File,
+  uploadedBy: string // Clerk user ID
+): Promise<MeetingDocument> {
+  const supabase = getServerSupabaseClient();
+  
+  // Get the meeting to check if it exists
+  const meeting = await getMeeting(meetingId);
+  if (!meeting) {
+    throw new Error('Meeting not found');
+  }
+
+  // Generate unique file key
+  const timestamp = Date.now();
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileKey = `meeting-documents/${meetingId}/${timestamp}-${sanitizedFilename}`;
+
+  // Convert File to Buffer
+  const fileBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(fileBuffer);
+
+  // Upload to R2
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: fileKey,
+    Body: buffer,
+    ContentType: file.type,
+    ContentLength: file.size,
+    Metadata: {
+      'original-filename': file.name.replace(/[^a-zA-Z0-9.-]/g, '_'),
+      'meeting-id': meetingId,
+      'uploaded-by': uploadedBy,
+    },
+  });
+
+  await r2Client.send(command);
+
+  // Construct public URL
+  const publicUrl = `${R2_PUBLIC_URL}/${fileKey}`;
+
+  // Create document object
+  const document: MeetingDocument = {
+    id: `doc_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+    url: publicUrl,
+    filename: file.name,
+    size: file.size,
+    mimeType: file.type,
+    uploadedAt: new Date().toISOString(),
+    uploadedBy,
+  };
+
+  // Get current documents array
+  const currentDocuments = meeting.documents || [];
+  const updatedDocuments = [...currentDocuments, document];
+
+  // Update meeting with new document
+  const { error } = await supabase
+    .from('meetings')
+    .update({ 
+      documents: updatedDocuments,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', meetingId);
+
+  if (error) {
+    console.error('Error updating meeting with document:', error);
+    // Try to delete the uploaded file if database update fails
+    try {
+      await r2Client.send(new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: fileKey,
+      }));
+    } catch (deleteError) {
+      console.error('Error deleting file after failed database update:', deleteError);
+    }
+    throw new Error(`Failed to save document: ${error.message}`);
+  }
+
+  return document;
+}
+
+/**
+ * Delete a document from a meeting
+ */
+export async function deleteMeetingDocument(
+  meetingId: string,
+  documentId: string
+): Promise<boolean> {
+  const supabase = getServerSupabaseClient();
+  
+  // Get the meeting
+  const meeting = await getMeeting(meetingId);
+  if (!meeting) {
+    throw new Error('Meeting not found');
+  }
+
+  // Find the document to delete
+  const documents = meeting.documents || [];
+  const documentToDelete = documents.find((doc: MeetingDocument) => doc.id === documentId);
+  
+  if (!documentToDelete) {
+    throw new Error('Document not found');
+  }
+
+  // Extract file key from URL
+  const url = new URL(documentToDelete.url);
+  const fileKey = url.pathname.substring(1); // Remove leading slash
+
+  // Delete from R2
+  try {
+    await r2Client.send(new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: fileKey,
+    }));
+  } catch (error) {
+    console.error('Error deleting file from R2:', error);
+    // Continue with database update even if R2 delete fails
+  }
+
+  // Remove document from array
+  const updatedDocuments = documents.filter((doc: MeetingDocument) => doc.id !== documentId);
+
+  // Update meeting
+  const { error } = await supabase
+    .from('meetings')
+    .update({ 
+      documents: updatedDocuments,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', meetingId);
+
+  if (error) {
+    console.error('Error updating meeting after document deletion:', error);
+    return false;
+  }
+
+  return true;
 }

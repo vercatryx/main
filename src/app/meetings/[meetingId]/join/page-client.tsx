@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Meeting } from "@/lib/meetings";
+import { Meeting, MeetingDocument } from "@/lib/meetings";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, UserPlus, Check, MousePointer2 } from "lucide-react";
+import { ArrowLeft, Copy, UserPlus, Check, MousePointer2, Paperclip, X, Download, Trash2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import AnimatedLogo from "@/components/AnimatedLogo";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface JitsiMeetClientProps {
   meeting: Meeting;
@@ -41,6 +48,11 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
   const pointerOverlayRef = useRef<HTMLDivElement | null>(null);
   const mouseMoveHandlerRef = useRef<((e: MouseEvent) => void) | null>(null);
   const router = useRouter();
+  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [documents, setDocuments] = useState<MeetingDocument[]>(meeting.documents || []);
+  const [uploading, setUploading] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Fetch JWT token first
@@ -287,6 +299,92 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
     navigator.clipboard.writeText(meetingUrl);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const refreshDocuments = async () => {
+    try {
+      const response = await fetch(`/api/meetings/${meeting.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.meeting?.documents) {
+          setDocuments(data.meeting.documents);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing documents:', error);
+    }
+  };
+
+  const handleOpenDocumentsModal = () => {
+    setShowDocumentsModal(true);
+    refreshDocuments();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/meetings/${meeting.id}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      const newDocument = await response.json();
+      setDocuments(prev => [...prev, newDocument]);
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      alert(error instanceof Error ? error.message : 'Failed to upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    setDeletingDocId(documentId);
+    try {
+      const response = await fetch(`/api/meetings/${meeting.id}/documents?documentId=${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Delete failed');
+      }
+
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete document');
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handleOpenInviteModal = async () => {
@@ -556,6 +654,15 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
 
         {/* Meeting Controls */}
         <div className="flex items-center gap-2">
+          <Button
+            onClick={handleOpenDocumentsModal}
+            variant="outline"
+            size="sm"
+            className="bg-secondary border-border text-foreground hover:bg-secondary"
+          >
+            <Paperclip className="mr-2 h-4 w-4" />
+            Documents {documents.length > 0 && `(${documents.length})`}
+          </Button>
           {isSuperuser && (
             <>
               <Button
@@ -632,6 +739,116 @@ export default function JitsiMeetClient({ meeting, userId, displayName, isSuperu
 
         <div ref={jitsiContainerRef} className="w-full h-full" />
       </div>
+
+      {/* Documents Modal */}
+      <Dialog open={showDocumentsModal} onOpenChange={setShowDocumentsModal}>
+        <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Meeting Documents</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Attach and manage documents for this meeting
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Upload Section */}
+            <div className="border border-border rounded-lg p-4 bg-secondary">
+              <label className="block mb-2 text-sm font-medium text-foreground">
+                Upload Document
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="document-upload"
+                  disabled={uploading}
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  size="sm"
+                  disabled={uploading}
+                  className="bg-secondary border-border text-foreground hover:bg-secondary"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Paperclip className="mr-2 h-4 w-4" />
+                      Choose File
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Documents List */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Attached Documents ({documents.length})
+              </h3>
+              {documents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No documents attached yet
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-3 border border-border rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {doc.filename}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(doc.size)} • {new Date(doc.uploadedAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(doc.url, '_blank')}
+                          className="text-foreground hover:text-foreground"
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        {(isSuperuser || doc.uploadedBy === userId) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            disabled={deletingDocId === doc.id}
+                            className="text-destructive hover:text-destructive"
+                            title="Delete"
+                          >
+                            {deletingDocId === doc.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Modal */}
       {showInviteModal && isSuperuser && (
