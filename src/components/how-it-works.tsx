@@ -1,70 +1,53 @@
 export function HowItWorks() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-card">
-      <div className="max-w-5xl mx-auto">
-        <h2 className="text-foreground text-center mb-6 text-3xl md:text-5xl">
-          What Can We Automate?
+    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-[#0f1115] border-t border-b border-[rgba(255,255,255,0.04)]">
+      <div className="max-w-7xl mx-auto">
+        <h2 className="text-[#f9fafb] text-center mb-8 text-4xl md:text-5xl lg:text-6xl font-bold">
+          Work We Commonly Replace
         </h2>
-        <p className="text-xl md:text-2xl text-muted-foreground text-center mb-16">
-          If you do it more than once a week, we can probably automate it.
+        <p className="text-xl md:text-2xl leading-[1.5] text-[#9ca3af] text-center mb-20">
+          Nearly any structured, repeatable process can be automated.
         </p>
         
-        <div className="bg-secondary rounded-2xl p-8 md:p-12 border border-border">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="text-foreground text-xl mb-6">Common Tasks We Handle:</h3>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Billing, insurance claims, and prior authorizations</p>
+        <div className="bg-[#171718] rounded-2xl p-10 md:p-16 border border-[rgba(255,255,255,0.04)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Billing, insurance claims, prior authorizations <span className="text-[#9ca3af]">(reduces processing time and errors)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Checking insurance eligibility and benefits</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Eligibility checks and benefits verification <span className="text-[#9ca3af]">(faster approvals)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Data entry, document scanning, and pulling information from files</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Payment posting, reconciliation, AR follow-up <span className="text-[#9ca3af]">(reduces aging balances)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Payment posting, reconciliation, and following up on aging accounts</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Appointment scheduling, reminders, and rescheduling</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Data entry, document parsing, record updates <span className="text-[#9ca3af]">(instant updates)</span></p>
               </div>
             </div>
             
-            <div className="space-y-4">
-              <h3 className="text-foreground text-xl mb-6">&nbsp;</h3>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Intake forms, onboarding, and collecting documents</p>
+            <div className="space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Intake forms, onboarding, document collection <span className="text-[#9ca3af]">(automated ingestion)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Compliance reports and audit preparation</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Scheduling, reminders, and rescheduling <span className="text-[#9ca3af]">(fewer no-shows)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Inventory tracking and restock notifications</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Compliance reporting and audit prep <span className="text-[#9ca3af]">(organized, auditable logs)</span></p>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Calling, texting, and emailing customers or patients</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-foreground text-lg">Quality checks, error detection, and reviewing processes</p>
+              <div className="flex items-start gap-4">
+                <div className="w-3 h-3 bg-[#ff3b30] rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-xl leading-[1.5] text-[#f9fafb]">Customer communication: calling, texting, emailing <span className="text-[#9ca3af]">(consistent follow-up)</span></p>
               </div>
             </div>
-          </div>
-          
-          <div className="mt-12 pt-8 border-t border-border">
-            <p className="text-foreground text-lg text-center leading-relaxed">
-              Think of it like hiring an assistant who never gets tired, never makes mistakes, 
-              and can work on thousands of tasks at the same time.
-            </p>
           </div>
         </div>
       </div>

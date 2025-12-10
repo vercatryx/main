@@ -32,6 +32,7 @@ export interface Meeting {
   startedAt?: string;
   endedAt?: string;
   documents?: MeetingDocument[]; // Array of attached documents
+  meetingRequestId?: string; // Optional - links back to meeting_request if created from scheduling
 }
 
 // Type for database row (snake_case from Supabase)
@@ -54,6 +55,7 @@ type MeetingRow = {
   started_at: string | null;
   ended_at: string | null;
   documents: any; // JSONB array of MeetingDocument
+  meeting_request_id: string | null;
 };
 
 /**
@@ -79,6 +81,7 @@ function rowToMeeting(row: MeetingRow): Meeting {
     startedAt: row.started_at || undefined,
     endedAt: row.ended_at || undefined,
     documents: row.documents ? (Array.isArray(row.documents) ? row.documents : []) : undefined,
+    meetingRequestId: row.meeting_request_id || undefined,
   };
 }
 
@@ -88,7 +91,10 @@ function rowToMeeting(row: MeetingRow): Meeting {
 function meetingToRow(meeting: Partial<Meeting>): Partial<MeetingRow> {
   const row: Partial<MeetingRow> = {};
 
-  if (meeting.id !== undefined) row.id = meeting.id;
+  // Only include id if it's a valid non-empty string (let DB generate if empty/undefined)
+  if (meeting.id !== undefined && meeting.id !== null && meeting.id !== '') {
+    row.id = meeting.id;
+  }
   if (meeting.projectId !== undefined) row.project_id = meeting.projectId || null;
   if (meeting.companyId !== undefined) row.company_id = meeting.companyId || null;
   if (meeting.title !== undefined) row.title = meeting.title;
@@ -105,14 +111,16 @@ function meetingToRow(meeting: Partial<Meeting>): Partial<MeetingRow> {
   if (meeting.updatedAt !== undefined) row.updated_at = meeting.updatedAt;
   if (meeting.startedAt !== undefined) row.started_at = meeting.startedAt || null;
   if (meeting.endedAt !== undefined) row.ended_at = meeting.endedAt || null;
+  if (meeting.meetingRequestId !== undefined) row.meeting_request_id = meeting.meetingRequestId || null;
 
   return row;
 }
 
 /**
  * Create a new meeting
+ * Note: id is optional - if not provided, database will generate it
  */
-export async function createMeeting(meeting: Meeting): Promise<Meeting> {
+export async function createMeeting(meeting: Omit<Meeting, 'id'> & { id?: string }): Promise<Meeting> {
   const supabase = getServerSupabaseClient();
   const row = meetingToRow(meeting);
 
@@ -372,18 +380,25 @@ export async function getUpcomingMeetings(userId: string): Promise<Meeting[]> {
  * Get all meetings (admin only)
  */
 export async function getAllMeetingsList(): Promise<Meeting[]> {
-  const supabase = getServerSupabaseClient();
-  const { data, error } = await supabase
-    .from('meetings')
-    .select('*')
-    .order('scheduled_at', { ascending: false });
+  try {
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase
+      .from('meetings')
+      .select('*')
+      .order('scheduled_at', { ascending: false });
 
-  if (error) {
-    console.error('Error getting all meetings:', error);
-    throw new Error(`Failed to get all meetings: ${error.message}`);
+    if (error) {
+      console.error('Error getting all meetings:', error);
+      // Return empty array instead of throwing to allow graceful degradation
+      return [];
+    }
+
+    return (data || []).map((row) => rowToMeeting(row as MeetingRow));
+  } catch (error) {
+    console.error('Error in getAllMeetingsList:', error);
+    // Return empty array on any error to allow graceful degradation
+    return [];
   }
-
-  return (data || []).map((row) => rowToMeeting(row as MeetingRow));
 }
 
 /**

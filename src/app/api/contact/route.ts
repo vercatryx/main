@@ -119,14 +119,15 @@ Submitted at ${new Date().toLocaleString()}
 Reply to: ${email}
     `;
 
-    // Create a transporter using Gmail with explicit configuration
+    // Create a transporter using Zoho with explicit configuration
+    const zohoEmail = process.env.ZOHO_EMAIL || 'info@vercatryx.com';
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: 'smtp.zoho.com',
       port: 587,
       secure: false, // use STARTTLS
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: zohoEmail,
+        pass: process.env.ZOHO_APP_PASSWORD,
       },
       tls: {
         rejectUnauthorized: false
@@ -135,7 +136,7 @@ Reply to: ${email}
 
     // Send email
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Vercatryx" <${zohoEmail}>`,
       to: 'hshloimie@gmail.com',
       subject: `New Contact Form Submission from ${name}${company ? ` (${company})` : ''}`,
       html: htmlBody,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy, Mail, DollarSign } from "lucide-react";
+import { Building2, Users, FolderOpen, LogOut, RefreshCw, FileSignature, Copy, Mail, DollarSign, Calendar, Maximize2 } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 import { toast } from "sonner";
 import CompaniesManagement from "@/components/admin/companies-management";
@@ -52,7 +52,7 @@ interface AdminClientNewProps {
   isSuperAdmin: boolean;
 }
 
-type TabType = "companies" | "users" | "projects" | "signatures" | "email" | "payments";
+type TabType = "companies" | "users" | "projects" | "signatures" | "email" | "payments" | "meetings";
 
 interface SignatureRequest {
   id: string;
@@ -267,6 +267,17 @@ export default function AdminClientNew({
           >
             <DollarSign className="w-5 h-5" />
             Payments
+          </button>
+          <button
+            onClick={() => setActiveTab("meetings")}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+              activeTab === "meetings"
+                ? "border-blue-600 text-blue-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Calendar className="w-5 h-5" />
+            Calendar
           </button>
         </div>
       </div>
@@ -556,6 +567,33 @@ export default function AdminClientNew({
             currentUser={currentUser}
             onDataChange={handleDataChange}
           />
+        )}
+
+        {activeTab === "meetings" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-semibold">Calendar</h2>
+              <button
+                onClick={() => {
+                  const newWindow = window.open('/admin/calendar', '_blank');
+                  if (newWindow) {
+                    newWindow.focus();
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+              >
+                <Maximize2 className="w-4 h-4" />
+                Open in Full Screen
+              </button>
+            </div>
+            <div className="border border-border rounded-lg overflow-hidden" style={{ height: '800px' }}>
+              <iframe
+                src="/admin/calendar"
+                className="w-full h-full border-0"
+                title="Admin Calendar"
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

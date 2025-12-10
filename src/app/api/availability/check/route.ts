@@ -159,14 +159,15 @@ Call: ${phone}
 Request made at ${new Date().toLocaleString()}
     `;
 
-    // Create a transporter using Gmail
+    // Create a transporter using Zoho
+    const zohoEmail = process.env.ZOHO_EMAIL || 'info@vercatryx.com';
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: 'smtp.zoho.com',
       port: 587,
       secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: zohoEmail,
+        pass: process.env.ZOHO_APP_PASSWORD,
       },
       tls: {
         rejectUnauthorized: false
@@ -175,7 +176,7 @@ Request made at ${new Date().toLocaleString()}
 
     // Send email
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Vercatryx" <${zohoEmail}>`,
       to: 'hshloimie@gmail.com',
       subject: `🔔 URGENT: ${name} wants to talk NOW!${company ? ` (${company})` : ''}`,
       html: htmlBody,

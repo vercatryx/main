@@ -360,7 +360,7 @@ export async function POST(
       content: [
         // Header with Logo
         ...(logoImage ? [{
-          image: 'logo.png', // Reference from vfs
+          image: 'logo.png', // Reference from vfs (converted from SVG)
           width: 150,
           alignment: 'center',
           margin: [0, 0, 0, 20],
@@ -514,11 +514,9 @@ export async function POST(
     
     const pdfDoc = pdfMake.createPdf(pdfDocDefinition);
     const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
+      pdfDoc.getBuffer((buffer: Buffer) => {
+        resolve(Buffer.from(buffer));
+      });
     });
     
     console.log('[RECEIPT ROUTE POST] PDF generated, size:', pdfBuffer.length, 'bytes');

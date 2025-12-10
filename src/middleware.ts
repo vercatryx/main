@@ -9,13 +9,23 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/clerk(.*)",
   "/api/contact(.*)",
   "/api/availability(.*)",
+  "/api/meeting-requests/available-slots(.*)", // Public - get available slots
   "/payments(.*)",
   "/api/payments/request(.*)",
   "/api/payments/create-intent(.*)",
   "/api/payments/send-invoice(.*)",
 ]);
 
+// Check if route should be public based on method (for routes that handle auth internally)
 export default clerkMiddleware(async (auth, request) => {
+  const url = request.nextUrl.pathname;
+  
+  // Allow POST to /api/meeting-requests (public endpoint, handles auth internally)
+  if (url === '/api/meeting-requests' && request.method === 'POST') {
+    return; // Allow through without auth
+  }
+  
+  // All other routes check public route matcher
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
