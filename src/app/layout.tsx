@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/contexts/theme-context";
 import "@/styles/globals.css";
 import { ThemeRegistry } from "@/components/theme-registry";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/next"
+
 
 export const metadata: Metadata = {
   title: {
@@ -29,6 +31,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
+
   children,
 }: {
   children: React.ReactNode;
@@ -89,6 +92,7 @@ export default function RootLayout({
             {children}
             <Toaster />
           </ThemeProvider>
+          <Analytics />
         </body>
       </html>
     </ClerkProvider>
