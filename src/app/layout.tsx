@@ -4,7 +4,8 @@ import { ThemeProvider } from "@/contexts/theme-context";
 import "@/styles/globals.css";
 import { ThemeRegistry } from "@/components/theme-registry";
 import { Toaster } from "@/components/ui/sonner";
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/next";
+import Script from "next/script";
 
 
 export const metadata: Metadata = {
@@ -27,6 +28,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
@@ -56,6 +61,32 @@ export default function RootLayout({
     >
       <html lang="en" suppressHydrationWarning>
         <body>
+          {/* Google tag (gtag.js) - Google Ads */}
+          <Script
+            src="https://www.googletagmanager.com/gtag/js?id=AW-17797962537"
+            strategy="afterInteractive"
+          />
+          <Script id="google-ads" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'AW-17797962537');
+            `}
+          </Script>
+          {/* Google tag (gtag.js) - Google Analytics */}
+          <Script
+            src="https://www.googletagmanager.com/gtag/js?id=G-PMYHEZPT36"
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-PMYHEZPT36');
+            `}
+          </Script>
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

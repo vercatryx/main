@@ -918,7 +918,7 @@ function PaymentsPageContent() {
                 )}
                 <div className="border rounded-md p-3 space-y-1 text-sm">
                   <div className="flex justify-between"><span>Bank Name:</span><span>JPMorgan Chase Bank, N.A.</span></div>
-                  <div className="flex justify-between"><span>Account Number:</span><span>307234937</span></div>
+                  <div className="flex justify-between"><span>Account Number:</span><span>2904236301</span></div>
                   <div className="flex justify-between"><span>Wire Routing Number:</span><span>021000021</span></div>
                   <div className="flex justify-between"><span>Account Name:</span><span>David Heimowitz</span></div>
                 </div>
@@ -933,7 +933,7 @@ function PaymentsPageContent() {
                   <p className="text-sm">Send payment via Zelle. Contact us to confirm the amount.</p>
                 )}
                 <div className="border rounded-md p-3 space-y-1 text-sm">
-                  <div className="flex justify-between"><span>Phone:</span><span>(347) 215-0400</span></div>
+                  <div className="flex justify-between"><span>Email:</span><span>pay@vercatryx.com</span></div>
                 </div>
               </div>
             )}

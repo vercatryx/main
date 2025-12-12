@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 // Define public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
@@ -16,19 +17,32 @@ const isPublicRoute = createRouteMatcher([
   "/api/payments/send-invoice(.*)",
 ]);
 
+// Routes that should be indexed by search engines
+const indexableRoutes = ["/", "/contact"];
+
 // Check if route should be public based on method (for routes that handle auth internally)
 export default clerkMiddleware(async (auth, request) => {
   const url = request.nextUrl.pathname;
   
   // Allow POST to /api/meeting-requests (public endpoint, handles auth internally)
   if (url === '/api/meeting-requests' && request.method === 'POST') {
-    return; // Allow through without auth
+    const response = NextResponse.next();
+    return response;
   }
   
   // All other routes check public route matcher
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
+  
+  // Set X-Robots-Tag header for indexable public routes
+  if (indexableRoutes.includes(url)) {
+    const response = NextResponse.next();
+    response.headers.set('X-Robots-Tag', 'index, follow');
+    return response;
+  }
+  
+  return NextResponse.next();
 });
 
 export const config = {
